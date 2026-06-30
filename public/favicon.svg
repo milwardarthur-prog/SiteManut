@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <clipPath id="gear">
+      <path d="M128 20 L140 20 L145 0 L155 0 L160 20 L172 20 L182 5 L190 10 L185 25 L195 32 L210 22 L215 30 L205 45 L215 55 L230 50 L235 58 L220 68 L225 80 L245 85 L245 95 L225 100 L220 112 L235 122 L230 130 L215 125 L205 135 L215 150 L207 158 L192 148 L182 155 L187 170 L179 175 L169 160 L157 165 L162 185 L152 185 L147 165 L135 165 L130 185 L120 185 L115 165 L103 160 L93 175 L85 170 L90 155 L80 148 L65 158 L57 150 L67 135 L57 125 L42 130 L37 122 L52 112 L47 100 L27 95 L27 85 L47 80 L52 68 L37 58 L42 50 L57 55 L67 45 L57 30 L65 22 L80 32 L90 25 L85 10 L93 5 L103 20 L115 20 L120 0 L130 0 L135 20 Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#gear)">
+    <rect width="256" height="256" fill="#1F2937"/>
+    <circle cx="128" cy="128" r="85" fill="#F97316"/>
+    <text x="128" y="185" font-family="Arial, sans-serif" font-size="140" font-weight="bold" fill="#1F2937" text-anchor="middle">B</text>
+  </g>
+</svg>

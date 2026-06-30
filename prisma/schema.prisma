@@ -1,0 +1,151 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/manutencao_beltloc/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+}
+
+enum MaintenanceType {
+  PREVENTIVA
+  CORRETIVA
+  RETRABALHO
+}
+
+enum WorkOrderStatus {
+  PENDENTE_APROVACAO
+  APROVADA
+  EM_EXECUCAO
+  AGUARDANDO_ENCERRAMENTO
+  FINALIZADA
+  REJEITADA
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  password       String
+  role           UserRole @default(TECHNICIAN)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  assignedOrders WorkOrder[]       @relation("TechnicianOrders")
+  createdOrders  WorkOrder[]       @relation("CreatorOrders")
+  closedOrders   WorkOrder[]       @relation("CloserOrders")
+  helperRecords  WorkOrderHelper[]
+}
+
+model Equipment {
+  id             String   @id @default(cuid())
+  equipmentNumber String  @unique
+  name           String
+  description    String?
+  model          String?
+  year           Int?
+  currentHorimeter Float  @default(0)
+  location       String?
+  serialNumber   String?
+  qrCodeData     String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  files          EquipmentFile[]
+  workOrders     WorkOrder[]
+
+  @@index([equipmentNumber])
+}
+
+model EquipmentFile {
+  id               String   @id @default(cuid())
+  fileName         String
+  cloudStoragePath String
+  contentType      String   @default("application/pdf")
+  isPublic         Boolean  @default(false)
+  fileSize         Int?     
+  equipmentId      String
+  equipment        Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+
+  @@index([equipmentId])
+}
+
+model WorkOrder {
+  id              String          @id @default(cuid())
+  orderNumber     Int             @unique @default(autoincrement())
+  status          WorkOrderStatus @default(PENDENTE_APROVACAO)
+  maintenanceType MaintenanceType
+  horimeter       Float?          
+  comments        String?         
+  adminNotes      String?         
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  startedAt       DateTime?       
+  techClosedAt    DateTime?       
+  closedAt        DateTime?       
+  totalTimeMinutes Int?           
+
+  technicianId    String
+  technician      User            @relation("TechnicianOrders", fields: [technicianId], references: [id])
+  createdById     String
+  createdBy       User            @relation("CreatorOrders", fields: [createdById], references: [id])
+  closedById      String?
+  closedBy        User?           @relation("CloserOrders", fields: [closedById], references: [id])
+  equipmentId     String
+  equipment       Equipment       @relation(fields: [equipmentId], references: [id])
+
+  parts           WorkOrderPart[]
+  helpers         WorkOrderHelper[]
+  photos          WorkOrderPhoto[]
+
+  @@index([status])
+  @@index([technicianId])
+  @@index([equipmentId])
+  @@index([createdAt])
+}
+
+model WorkOrderPart {
+  id          String    @id @default(cuid())
+  description String
+  quantity    Int       @default(1)
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([workOrderId])
+}
+
+model WorkOrderHelper {
+  id          String    @id @default(cuid())
+  startTime   DateTime
+  endTime     DateTime?
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  helperId    String
+  helper      User      @relation(fields: [helperId], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([workOrderId])
+  @@index([helperId])
+}
+
+model WorkOrderPhoto {
+  id               String    @id @default(cuid())
+  fileName         String
+  cloudStoragePath String
+  contentType      String    @default("image/jpeg")
+  isPublic         Boolean   @default(false)
+  workOrderId      String
+  workOrder        WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+
+  @@index([workOrderId])
+}
