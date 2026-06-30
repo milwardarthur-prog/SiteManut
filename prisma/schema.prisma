@@ -54,6 +54,35 @@ model Equipment {
   location       String?
   serialNumber   String?
   qrCodeData     String   @unique
+
+  // Filtros
+  airFilter1     String?
+  airFilter2     String?
+  fuelFilter1    String?
+  fuelFilter2    String?
+  fuelFilter3    String?
+  fuelFilter4    String?
+  lubeFilter1    String?
+  lubeFilter2    String?
+  lubeFilter3    String?
+  lubeFilter4    String?
+  waterFilter    String?
+
+  // Componentes
+  controller     String?
+  tank           String?
+  crankcase      String?
+  battery        String?
+  belt1          String?
+  belt2          String?
+  belt3          String?
+  belt4          String?
+
+  // Dimensões
+  height         String?
+  width          String?
+  depth          String?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -4,7 +4,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { EXTRA_FIELD_KEYS } from "@/lib/equipment-fields";
 import crypto from "crypto";
+
+// Extrai os campos extras (Filtros, Componentes, Dimensões) do body.
+// Strings vazias são convertidas em null.
+function pickExtraFields(body: any): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const key of EXTRA_FIELD_KEYS) {
+    const value = body?.[key];
+    out[key] = value === undefined || value === null || value === "" ? null : String(value);
+  }
+  return out;
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -60,6 +72,7 @@ export async function POST(req: NextRequest) {
         location: location ?? null,
         serialNumber: serialNumber ?? null,
         qrCodeData,
+        ...pickExtraFields(body),
       },
     });
     return NextResponse.json(equipment, { status: 201 });

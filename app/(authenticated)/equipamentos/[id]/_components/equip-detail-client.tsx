@@ -3,10 +3,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Loader2, Wrench, FileText, Upload, Trash2, ClipboardList, QrCode, Download } from "lucide-react";
+import { ArrowLeft, Loader2, Wrench, FileText, Upload, Trash2, ClipboardList, QrCode, Download, Pencil, Filter, Settings2, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { EQUIPMENT_SECTIONS } from "@/lib/equipment-fields";
 
 const QRCode: any = dynamic(() => import("react-qr-code").then((m: any) => m.default ?? m), { ssr: false });
 
@@ -74,10 +75,17 @@ export default function EquipDetailClient({ id }: { id: string }) {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/equipamentos"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-display font-bold tracking-tight">{equip?.name}</h1>
           <p className="text-sm text-muted-foreground font-mono">{equip?.equipmentNumber}</p>
         </div>
+        {isAdmin && (
+          <Link href={`/equipamentos/${id}/editar`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <Pencil className="w-4 h-4" /> Editar
+            </Button>
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -101,6 +109,30 @@ export default function EquipDetailClient({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Seções: Filtros, Componentes, Dimensões (exibidas apenas se houver ao menos 1 campo preenchido) */}
+      {EQUIPMENT_SECTIONS.map((section) => {
+        const filled = section.fields.filter((f) => {
+          const v = equip?.[f.key];
+          return v != null && String(v).trim() !== "";
+        });
+        if (filled.length === 0) return null;
+        const Icon = section.title === "Filtros" ? Filter : section.title === "Componentes" ? Settings2 : Ruler;
+        return (
+          <Card key={section.title} className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2"><Icon className="w-4 h-4" /> {section.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {filled.map((f) => (
+                  <Row key={f.key} label={f.label} value={equip?.[f.key]} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
 
       {/* Files */}
       <Card className="border-0 shadow-sm">

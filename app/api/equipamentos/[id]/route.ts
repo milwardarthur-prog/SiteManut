@@ -4,6 +4,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { EXTRA_FIELD_KEYS } from "@/lib/equipment-fields";
+
+// Extrai os campos extras (Filtros, Componentes, Dimensões) do body.
+// Strings vazias são convertidas em null.
+function pickExtraFields(body: any): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const key of EXTRA_FIELD_KEYS) {
+    const value = body?.[key];
+    out[key] = value === undefined || value === null || value === "" ? null : String(value);
+  }
+  return out;
+}
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -41,17 +53,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const body = await req.json();
     const { equipmentNumber, name, description, model, year, currentHorimeter, location, serialNumber } = body ?? {};
+    if (!equipmentNumber || !name) {
+      return NextResponse.json({ error: "Número e nome são obrigatórios" }, { status: 400 });
+    }
+    // Garante que o número não conflite com outro equipamento
+    const conflict = await prisma.equipment.findUnique({ where: { equipmentNumber } });
+    if (conflict && conflict.id !== params?.id) {
+      return NextResponse.json({ error: "Número de equipamento já existe" }, { status: 400 });
+    }
     const equipment = await prisma.equipment.update({
       where: { id: params?.id },
       data: {
-        ...(equipmentNumber && { equipmentNumber }),
-        ...(name && { name }),
-        description: description ?? undefined,
-        model: model ?? undefined,
-        year: year ? parseInt(year) : undefined,
-        currentHorimeter: currentHorimeter ? parseFloat(currentHorimeter) : undefined,
-        location: location ?? undefined,
-        serialNumber: serialNumber ?? undefined,
+        equipmentNumber,
+        name,
+        description: description ?? null,
+        model: model ?? null,
+        year: year ? parseInt(year) : null,
+        currentHorimeter: currentHorimeter !== undefined && currentHorimeter !== "" ? parseFloat(currentHorimeter) : undefined,
+        location: location ?? null,
+        serialNumber: serialNumber ?? null,
+        ...pickExtraFields(body),
       },
     });
     return NextResponse.json(equipment);
