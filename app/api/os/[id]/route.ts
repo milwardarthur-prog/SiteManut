@@ -8,6 +8,14 @@ import { prisma } from "@/lib/db";
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
 const LOADTEST_FIELDS = ["voltageEmpty", "frequencyEmpty", "load", "frequencyLoad"] as const;
 
+// Todos os campos de filtro do equipamento (usados na Revisão)
+const EQUIP_FILTER_KEYS = {
+  airFilter1: true, airFilter2: true,
+  fuelFilter1: true, fuelFilter2: true, fuelFilter3: true, fuelFilter4: true,
+  lubeFilter1: true, lubeFilter2: true, lubeFilter3: true, lubeFilter4: true,
+  waterFilter: true,
+} as const;
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -17,7 +25,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       where: { id: params?.id },
       include: {
         technician: { select: { id: true, name: true, email: true } },
-        equipment: { select: { id: true, equipmentNumber: true, name: true, currentHorimeter: true } },
+        equipment: {
+          select: {
+            id: true, equipmentNumber: true, name: true, currentHorimeter: true,
+            ...EQUIP_FILTER_KEYS,
+          },
+        },
         createdBy: { select: { id: true, name: true } },
         closedBy: { select: { id: true, name: true } },
         parts: { orderBy: { createdAt: "asc" } },
@@ -85,6 +98,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
     for (const f of LOADTEST_FIELDS) {
       if (body?.[f] !== undefined) data[f] = body[f] || null;
+    }
+
+    // Campos de revisão (troca de óleo e filtros)
+    if (body?.revisionDate !== undefined) {
+      data.revisionDate = body.revisionDate ? new Date(body.revisionDate) : null;
+    }
+    if (body?.oilLiters !== undefined) data.oilLiters = body.oilLiters || null;
+    if (body?.revisionFilters !== undefined) {
+      if (body.revisionFilters && typeof body.revisionFilters === "object") {
+        data.revisionFilters = JSON.stringify(body.revisionFilters);
+      } else {
+        data.revisionFilters = body.revisionFilters || null;
+      }
     }
 
     const updated = await prisma.workOrder.update({

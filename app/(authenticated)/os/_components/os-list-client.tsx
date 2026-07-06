@@ -39,12 +39,14 @@ const scopeLabels: Record<string, string> = {
   NORMAL: "Normal",
   CHECKLIST: "Checklist",
   TESTE_CARGA: "Teste de Carga",
+  REVISAO: "Revisão",
 };
 
 const scopeColors: Record<string, string> = {
   NORMAL: "bg-gray-100 text-gray-700",
   CHECKLIST: "bg-teal-100 text-teal-800",
   TESTE_CARGA: "bg-indigo-100 text-indigo-800",
+  REVISAO: "bg-amber-100 text-amber-800",
 };
 
 // Tabs seguem o fluxo de status atual

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EXTRA_FIELD_KEYS } from "@/lib/equipment-fields";
+import { compararEquipmentNumber } from "@/lib/ge-equipamentos";
 import crypto from "crypto";
 
 // Extrai os campos extras (Filtros, Componentes, Dimensões) do body.
@@ -35,8 +36,9 @@ export async function GET(req: NextRequest) {
     const equipments = await prisma.equipment.findMany({
       where,
       include: { _count: { select: { workOrders: true, files: true } } },
-      orderBy: { name: "asc" },
     });
+    // Ordenação natural pelo número do equipamento (GE-99 antes de GE-100)
+    equipments.sort((a, b) => compararEquipmentNumber(a.equipmentNumber, b.equipmentNumber));
     return NextResponse.json(equipments);
   } catch {
     return NextResponse.json({ error: "Erro ao buscar equipamentos" }, { status: 500 });

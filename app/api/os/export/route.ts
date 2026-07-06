@@ -13,6 +13,32 @@ const fuelFilterLabels: Record<string, string> = {
   NAO_APLICA: "Não se aplica",
 };
 
+const FILTER_LABELS: { key: string; label: string }[] = [
+  { key: "airFilter1", label: "Filtro de Ar 1" },
+  { key: "airFilter2", label: "Filtro de Ar 2" },
+  { key: "fuelFilter1", label: "Filtro de Combustível 1" },
+  { key: "fuelFilter2", label: "Filtro de Combustível 2" },
+  { key: "fuelFilter3", label: "Filtro de Combustível 3" },
+  { key: "fuelFilter4", label: "Filtro de Combustível 4" },
+  { key: "lubeFilter1", label: "Filtro de Lubrificante 1" },
+  { key: "lubeFilter2", label: "Filtro de Lubrificante 2" },
+  { key: "lubeFilter3", label: "Filtro de Lubrificante 3" },
+  { key: "lubeFilter4", label: "Filtro de Lubrificante 4" },
+  { key: "waterFilter", label: "Filtro de Água" },
+];
+
+// Resume os filtros trocados de uma revisão (JSON revisionFilters) em texto.
+function resumoFiltrosTrocados(revisionFilters: string | null | undefined): string {
+  if (!revisionFilters) return "";
+  try {
+    const obj = JSON.parse(revisionFilters);
+    const trocados = FILTER_LABELS.filter((f) => obj?.[f.key] === "TROCADO").map((f) => f.label);
+    return trocados.join(", ");
+  } catch {
+    return "";
+  }
+}
+
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return "";
   return new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
@@ -57,6 +83,15 @@ export async function GET(req: NextRequest) {
 
     const loadTestOrders = await prisma.workOrder.findMany({
       where: { ...whereBase, scope: "TESTE_CARGA" },
+      include: {
+        equipment: { select: { equipmentNumber: true, name: true } },
+        technician: { select: { name: true } },
+      },
+      orderBy: { orderNumber: "asc" },
+    });
+
+    const revisionOrders = await prisma.workOrder.findMany({
+      where: { ...whereBase, scope: "REVISAO" },
       include: {
         equipment: { select: { equipmentNumber: true, name: true } },
         technician: { select: { name: true } },
@@ -140,8 +175,36 @@ export async function GET(req: NextRequest) {
     }
     headerStyle(wsLoad);
 
+    // ---- Planilha REVISÃO ----
+    const wsRevision = workbook.addWorksheet("Revisão");
+    wsRevision.columns = [
+      { header: "Nº OS", key: "orderNumber", width: 10 },
+      { header: "Equipamento", key: "equipment", width: 30 },
+      { header: "Data", key: "date", width: 14 },
+      { header: "Horímetro", key: "horimeter", width: 12 },
+      { header: "Óleo Motor (L)", key: "oilLiters", width: 14 },
+      { header: "Filtros Trocados", key: "filters", width: 45 },
+      { header: "Comentários", key: "comments", width: 40 },
+      { header: "Técnico", key: "technician", width: 20 },
+      { header: "Criado em", key: "createdAt", width: 20 },
+    ];
+    for (const o of revisionOrders) {
+      wsRevision.addRow({
+        orderNumber: o.orderNumber,
+        equipment: o.equipment ? `${o.equipment.equipmentNumber} - ${o.equipment.name}` : "",
+        date: fmtDateOnly(o.revisionDate) || fmtDateOnly(o.createdAt),
+        horimeter: o.horimeter ?? "",
+        oilLiters: o.oilLiters ?? "",
+        filters: resumoFiltrosTrocados(o.revisionFilters),
+        comments: o.comments ?? "",
+        technician: o.technician?.name ?? "",
+        createdAt: fmtDate(o.createdAt),
+      });
+    }
+    headerStyle(wsRevision);
+
     const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `relatorio-checklist-testecarga-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const filename = `relatorio-checklist-testecarga-revisao-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     return new NextResponse(buffer as any, {
       status: 200,

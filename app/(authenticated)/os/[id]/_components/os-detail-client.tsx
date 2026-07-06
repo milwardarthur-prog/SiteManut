@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, Play, StopCircle,
   Plus, Trash2, UserPlus, Camera, MessageSquare, Wrench, Clock,
   FileText, Users, Package, Save, Settings, Gauge, ClipboardCheck,
-  Zap, Send,
+  Zap, Send, Droplet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,13 +48,30 @@ const scopeLabels: Record<string, string> = {
   NORMAL: "Normal",
   CHECKLIST: "Checklist",
   TESTE_CARGA: "Teste de Carga",
+  REVISAO: "Revisão",
 };
 
 const scopeColors: Record<string, string> = {
   NORMAL: "bg-gray-100 text-gray-700",
   CHECKLIST: "bg-teal-100 text-teal-800",
   TESTE_CARGA: "bg-indigo-100 text-indigo-800",
+  REVISAO: "bg-amber-100 text-amber-800",
 };
+
+// Rótulos dos filtros do equipamento (para a seção de Revisão)
+const FILTER_LABELS: { key: string; label: string }[] = [
+  { key: "airFilter1", label: "Filtro de Ar 1" },
+  { key: "airFilter2", label: "Filtro de Ar 2" },
+  { key: "fuelFilter1", label: "Filtro de Combustível 1" },
+  { key: "fuelFilter2", label: "Filtro de Combustível 2" },
+  { key: "fuelFilter3", label: "Filtro de Combustível 3" },
+  { key: "fuelFilter4", label: "Filtro de Combustível 4" },
+  { key: "lubeFilter1", label: "Filtro de Lubrificante 1" },
+  { key: "lubeFilter2", label: "Filtro de Lubrificante 2" },
+  { key: "lubeFilter3", label: "Filtro de Lubrificante 3" },
+  { key: "lubeFilter4", label: "Filtro de Lubrificante 4" },
+  { key: "waterFilter", label: "Filtro de Água" },
+];
 
 export default function OSDetailClient({ id }: { id: string }) {
   const { data: session } = useSession() || {};
@@ -259,6 +276,11 @@ export default function OSDetailClient({ id }: { id: string }) {
         <LoadTestSection order={order} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
       )}
 
+      {/* Revisão */}
+      {order?.scope === "REVISAO" && (
+        <RevisionSection order={order} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
+      )}
+
       {/* Comments (histórico) */}
       <CommentsSection orderId={id} comments={order?.technicalComments ?? []} legacyComments={order?.comments ?? ""} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
 
@@ -356,7 +378,7 @@ function AdminControlsSection({ order, technicians, onSaved }: { order: any; tec
   const [horimeter, setHorimeter] = useState<string>(order?.horimeter != null ? String(order.horimeter) : "");
   const [saving, setSaving] = useState(false);
 
-  const isScoped = order?.scope === "CHECKLIST" || order?.scope === "TESTE_CARGA";
+  const isScoped = order?.scope === "CHECKLIST" || order?.scope === "TESTE_CARGA" || order?.scope === "REVISAO";
 
   const save = async () => {
     setSaving(true);
@@ -406,7 +428,7 @@ function AdminControlsSection({ order, technicians, onSaved }: { order: any; tec
                 ))}
               </SelectContent>
             </Select>
-            {isScoped && <p className="text-[10px] text-muted-foreground mt-1">Checklist/Teste de Carga sempre preventiva</p>}
+            {isScoped && <p className="text-[10px] text-muted-foreground mt-1">Checklist/Teste de Carga/Revisão sempre preventiva</p>}
           </div>
           <div>
             <Label className="text-xs">Horímetro</Label>
@@ -552,6 +574,120 @@ function LoadTestSection({ order, canEdit, onSaved }: { order: any; canEdit: boo
         {canEdit && (
           <Button onClick={save} disabled={saving} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
             {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Salvar Teste de Carga
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* Revisão — troca de óleo e filtros */
+function RevisionSection({ order, canEdit, onSaved }: { order: any; canEdit: boolean; onSaved: () => void }) {
+  const toDateInput = (v: any) => (v ? new Date(v).toISOString().slice(0, 10) : "");
+  const equip = order?.equipment ?? {};
+  // Filtros cadastrados no equipamento (campos não vazios)
+  const equipFilters = FILTER_LABELS.filter((f) => equip?.[f.key] && String(equip[f.key]).trim() !== "");
+
+  // Estado inicial dos filtros a partir do JSON salvo
+  const parseSaved = (): Record<string, string> => {
+    try {
+      const obj = order?.revisionFilters ? JSON.parse(order.revisionFilters) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch { return {}; }
+  };
+
+  const [revisionDate, setRevisionDate] = useState<string>(toDateInput(order?.revisionDate));
+  const [horimeter, setHorimeter] = useState<string>(order?.horimeter != null ? String(order.horimeter) : "");
+  const [oilLiters, setOilLiters] = useState<string>(order?.oilLiters ?? "");
+  const [filterStates, setFilterStates] = useState<Record<string, string>>(parseSaved());
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const filters: Record<string, string> = {};
+      for (const f of equipFilters) {
+        filters[f.key] = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+      }
+      const res = await fetch(`/api/os/${order?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          revisionDate: revisionDate || null,
+          horimeter: horimeter === "" ? null : parseFloat(horimeter),
+          oilLiters: oilLiters || null,
+          revisionFilters: filters,
+        }),
+      });
+      if (res.ok) { toast.success("Revisão salva!"); onSaved(); }
+      else toast.error("Erro ao salvar");
+    } catch { toast.error("Erro"); } finally { setSaving(false); }
+  };
+
+  return (
+    <Card className="border-2 border-amber-200 shadow-sm bg-amber-50/30">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2 text-amber-700"><Droplet className="w-4 h-4" /> Revisão (Óleo e Filtros)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs">Data</Label>
+            <Input type="date" value={revisionDate} onChange={(e: any) => setRevisionDate(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
+          </div>
+          <div>
+            <Label className="text-xs">Horímetro</Label>
+            <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
+          </div>
+          <div>
+            <Label className="text-xs">Óleo do Motor (litros)</Label>
+            <Input type="number" step="0.1" value={oilLiters} onChange={(e: any) => setOilLiters(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" placeholder="Ex: 12.5" />
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs">Filtros do Equipamento</Label>
+          {equipFilters.length === 0 ? (
+            <p className="text-xs text-amber-600 mt-1">Nenhum filtro cadastrado neste equipamento.</p>
+          ) : (
+            <div className="space-y-2 mt-1">
+              {equipFilters.map((f) => {
+                const state = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+                return (
+                  <div key={f.key} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 bg-white">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{f.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{equip?.[f.key]}</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {[{ v: "NAO", l: "Não trocado" }, { v: "TROCADO", l: "Trocado" }].map((opt) => (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => setFilterStates({ ...filterStates, [f.key]: opt.v })}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                            state === opt.v
+                              ? opt.v === "TROCADO"
+                                ? "bg-green-500 text-white border-green-500"
+                                : "bg-gray-500 text-white border-gray-500"
+                              : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                          } ${!canEdit ? "opacity-60 cursor-not-allowed" : ""}`}
+                        >
+                          {opt.l}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {canEdit && (
+          <Button onClick={save} disabled={saving} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Salvar Revisão
           </Button>
         )}
       </CardContent>

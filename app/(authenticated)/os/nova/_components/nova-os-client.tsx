@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Loader2, ClipboardList, Wrench, Gauge } from "lucide-react";
+import { ArrowLeft, Save, Loader2, ClipboardList, Wrench, Gauge, Droplet } from "lucide-react";
+import { FILTER_FIELDS } from "@/lib/equipment-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ const scopeOptions = [
   { value: "NORMAL", label: "OS Normal", icon: Wrench, desc: "Manutenção preventiva, corretiva ou retrabalho" },
   { value: "CHECKLIST", label: "Checklist (retorno de locação)", icon: ClipboardList, desc: "Preventiva — checagem ao retornar da locação" },
   { value: "TESTE_CARGA", label: "Teste de Carga", icon: Gauge, desc: "Preventiva — medições de teste de carga" },
+  { value: "REVISAO", label: "Revisão", icon: Droplet, desc: "Preventiva — troca de óleo e filtros" },
 ];
 
 function todayStr() {
@@ -92,6 +94,19 @@ export default function NovaOSClient() {
     frequencyLoad: "",
   });
 
+  // Revisão (troca de óleo e filtros)
+  const [revisionDate, setRevisionDate] = useState(todayStr());
+  const [oilLiters, setOilLiters] = useState("");
+  // Estado de cada filtro do equipamento: "TROCADO" | "NAO"
+  const [filterStates, setFilterStates] = useState<Record<string, string>>({});
+
+  // Equipamento selecionado (para puxar os filtros na Revisão)
+  const selectedEquip = (equipments ?? []).find((e: any) => e?.id === form.equipmentId);
+  // Filtros cadastrados no equipamento (campos não vazios)
+  const equipFilters = FILTER_FIELDS.filter(
+    (f) => selectedEquip && selectedEquip[f.key] && String(selectedEquip[f.key]).trim() !== ""
+  );
+
   useEffect(() => {
     fetch("/api/users/technicians").then((r) => r.json()).then(setTechnicians).catch(() => {});
     fetch("/api/equipamentos").then((r) => r.json()).then(setEquipments).catch(() => {});
@@ -122,6 +137,15 @@ export default function NovaOSClient() {
         Object.assign(payload, checklist);
       } else if (scope === "TESTE_CARGA") {
         Object.assign(payload, loadTest);
+      } else if (scope === "REVISAO") {
+        payload.revisionDate = revisionDate;
+        payload.oilLiters = oilLiters;
+        // Monta o estado dos filtros do equipamento (default "NAO")
+        const filters: Record<string, string> = {};
+        for (const f of equipFilters) {
+          filters[f.key] = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+        }
+        payload.revisionFilters = filters;
       }
 
       const res = await fetch("/api/os", {
@@ -130,7 +154,11 @@ export default function NovaOSClient() {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        toast.success(isAdmin ? "OS criada e aprovada!" : "OS criada e enviada para aprovação!");
+        if (scope === "CHECKLIST" || scope === "TESTE_CARGA") {
+          toast.success("OS criada em Aguardando Encerramento!");
+        } else {
+          toast.success(isAdmin ? "OS criada e aprovada!" : "OS criada e enviada para aprovação!");
+        }
         router.replace("/os");
       } else {
         const data = await res.json();
@@ -221,6 +249,11 @@ export default function NovaOSClient() {
             )}
 
             {(scope === "CHECKLIST" || scope === "TESTE_CARGA") && (
+              <p className="text-xs bg-blue-50 text-blue-700 rounded-md px-3 py-2">
+                Esta OS será registrada como <strong>Manutenção Preventiva</strong> e irá direto para <strong>Aguardando Encerramento</strong> (fora do fluxo normal de aprovação).
+              </p>
+            )}
+            {scope === "REVISAO" && (
               <p className="text-xs bg-blue-50 text-blue-700 rounded-md px-3 py-2">
                 Esta OS será registrada como <strong>Manutenção Preventiva</strong>.
               </p>
@@ -320,6 +353,76 @@ export default function NovaOSClient() {
                     <Label>Frequência com Carga</Label>
                     <Input value={loadTest.frequencyLoad} onChange={(e: any) => setLoadTest({ ...loadTest, frequencyLoad: e?.target?.value ?? "" })} placeholder="Ex: 59.8Hz" />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Campos REVISÃO */}
+            {scope === "REVISAO" && (
+              <div className="space-y-5 border-t pt-5">
+                <div className="space-y-2">
+                  <Label>Data</Label>
+                  <Input
+                    type="date"
+                    value={revisionDate}
+                    onChange={(e: any) => setRevisionDate(e?.target?.value ?? "")}
+                  />
+                </div>
+
+                {/* Óleo do motor — litros */}
+                <div className="space-y-2">
+                  <Label>Óleo do Motor — Litros colocados</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="Ex: 12.5"
+                    value={oilLiters}
+                    onChange={(e: any) => setOilLiters(e?.target?.value ?? "")}
+                  />
+                </div>
+
+                {/* Filtros do equipamento */}
+                <div className="space-y-3">
+                  <Label>Filtros do Equipamento</Label>
+                  {!form.equipmentId ? (
+                    <p className="text-xs text-muted-foreground">Selecione um equipamento para carregar os filtros cadastrados.</p>
+                  ) : equipFilters.length === 0 ? (
+                    <p className="text-xs text-amber-600 bg-amber-50 rounded-md px-3 py-2">
+                      Este equipamento não possui filtros cadastrados. Cadastre os filtros no equipamento para exibi-los aqui.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {equipFilters.map((f) => {
+                        const state = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+                        return (
+                          <div key={f.key} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900">{f.label}</p>
+                              <p className="text-xs text-muted-foreground truncate">{selectedEquip?.[f.key]}</p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              {[{ v: "NAO", l: "Não trocado" }, { v: "TROCADO", l: "Trocado" }].map((opt) => (
+                                <button
+                                  key={opt.v}
+                                  type="button"
+                                  onClick={() => setFilterStates({ ...filterStates, [f.key]: opt.v })}
+                                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                                    state === opt.v
+                                      ? opt.v === "TROCADO"
+                                        ? "bg-green-500 text-white border-green-500"
+                                        : "bg-gray-500 text-white border-gray-500"
+                                      : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                                  }`}
+                                >
+                                  {opt.l}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

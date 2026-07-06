@@ -32,6 +32,7 @@ enum OSScope {
   NORMAL
   CHECKLIST
   TESTE_CARGA
+  REVISAO
 }
 
 model User {
@@ -143,6 +144,11 @@ model WorkOrder {
   frequencyEmpty   String?
   load             String?
   frequencyLoad    String?
+
+  // Campos específicos de REVISÃO (troca de óleo e filtros)
+  revisionDate     DateTime?
+  oilLiters        String?
+  revisionFilters  String?   // JSON: { "fuelFilter1": "TROCADO" | "NAO", ... }
 
   technicianId    String?
   technician      User?           @relation("TechnicianOrders", fields: [technicianId], references: [id])

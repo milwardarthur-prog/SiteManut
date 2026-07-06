@@ -25,3 +25,32 @@ export function ordenarEquipamentos(lista: string[]): string[] {
     return numA - numB;
   });
 }
+
+// Comparador de ordenação NATURAL para números de equipamento (ex: "GE-99-170",
+// "GE-100-125"). Compara segmento a segmento: trechos numéricos são comparados
+// como número (99 < 100) e trechos de texto como string. Assim GE-99 vem antes
+// de GE-100 (e não pela ordem alfabética "GE-100" < "GE-99").
+export function compararEquipmentNumber(a?: string | null, b?: string | null): number {
+  const sa = (a ?? "").trim();
+  const sb = (b ?? "").trim();
+  // Divide em pedaços alternando dígitos e não-dígitos
+  const partsA = sa.match(/(\d+|\D+)/g) ?? [];
+  const partsB = sb.match(/(\d+|\D+)/g) ?? [];
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    const pa = partsA[i];
+    const pb = partsB[i];
+    if (pa === undefined) return -1;
+    if (pb === undefined) return 1;
+    const na = /^\d+$/.test(pa);
+    const nb = /^\d+$/.test(pb);
+    if (na && nb) {
+      const diff = parseInt(pa, 10) - parseInt(pb, 10);
+      if (diff !== 0) return diff;
+    } else {
+      const cmp = pa.localeCompare(pb, "pt-BR");
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}

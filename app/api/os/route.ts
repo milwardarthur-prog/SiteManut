@@ -9,6 +9,9 @@ import { prisma } from "@/lib/db";
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
 const LOADTEST_FIELDS = ["voltageEmpty", "frequencyEmpty", "load", "frequencyLoad"] as const;
 
+// Escopos que ficam fora do fluxo normal e já entram em "Aguardando Encerramento"
+const AUTO_AGUARDANDO_SCOPES = ["CHECKLIST", "TESTE_CARGA"];
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -127,9 +130,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Equipamento é obrigatório" }, { status: 400 });
     }
 
-    // Checklist e Teste de Carga são sempre PREVENTIVA
+    // Checklist, Teste de Carga e Revisão são sempre PREVENTIVA
     let finalType = maintenanceType;
-    if (scope === "CHECKLIST" || scope === "TESTE_CARGA") {
+    if (scope === "CHECKLIST" || scope === "TESTE_CARGA" || scope === "REVISAO") {
       finalType = "PREVENTIVA";
     }
     if (!finalType) {
@@ -147,7 +150,14 @@ export async function POST(req: NextRequest) {
       assignedTech = user?.id;
     }
 
-    const initialStatus = isAdmin ? "APROVADA" : "PENDENTE_APROVACAO";
+    // Checklist e Teste de Carga ficam fora do fluxo normal: já entram em
+    // "Aguardando Encerramento". Demais escopos seguem o fluxo de aprovação.
+    let initialStatus: string;
+    if (AUTO_AGUARDANDO_SCOPES.includes(scope)) {
+      initialStatus = "AGUARDANDO_ENCERRAMENTO";
+    } else {
+      initialStatus = isAdmin ? "APROVADA" : "PENDENTE_APROVACAO";
+    }
 
     const data: any = {
       status: initialStatus,
@@ -173,6 +183,17 @@ export async function POST(req: NextRequest) {
       if (body?.loadTestDate) data.loadTestDate = new Date(body.loadTestDate);
       for (const f of LOADTEST_FIELDS) {
         if (body?.[f] !== undefined && body?.[f] !== "") data[f] = body[f];
+      }
+    }
+
+    // Campos de revisão (troca de óleo e filtros)
+    if (scope === "REVISAO") {
+      if (body?.revisionDate) data.revisionDate = new Date(body.revisionDate);
+      if (body?.oilLiters !== undefined && body?.oilLiters !== "") data.oilLiters = String(body.oilLiters);
+      if (body?.revisionFilters && typeof body.revisionFilters === "object") {
+        data.revisionFilters = JSON.stringify(body.revisionFilters);
+      } else if (typeof body?.revisionFilters === "string" && body.revisionFilters) {
+        data.revisionFilters = body.revisionFilters;
       }
     }
 
