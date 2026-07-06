@@ -6,6 +6,8 @@ import Link from "next/link";
 import {
   LayoutDashboard,
   ClipboardList,
+  ClipboardCheck,
+  Zap,
   Wrench,
   BarChart3,
   ScanLine,
@@ -22,12 +24,16 @@ const adminLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
   { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
+  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
+  { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/scanner", label: "Escanear QR", icon: ScanLine },
 ];
 
 const techLinks = [
   { href: "/os", label: "Minhas OS", icon: ClipboardList },
+  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
+  { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
   { href: "/scanner", label: "Escanear QR", icon: ScanLine },
 ];
 

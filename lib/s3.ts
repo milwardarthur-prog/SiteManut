@@ -107,6 +107,47 @@ export async function getFileUrl(
   return getSignedUrl(s3, command, { expiresIn: 3600 });
 }
 
+// ── Armazenamento de texto simples (ex: CSV de Checklist / Teste de Carga) ──
+// Chave fixa: cada gravação sobrescreve o conteúdo anterior ("substituir tudo").
+export function dataKey(name: string): string {
+  const { folderPrefix } = getBucketConfig();
+  return `${folderPrefix}data/${name}`;
+}
+
+export async function putTextObject(
+  key: string,
+  text: string,
+  contentType: string = "text/csv; charset=utf-8"
+): Promise<void> {
+  const s3 = createS3Client();
+  const { bucketName } = getBucketConfig();
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: text,
+      ContentType: contentType,
+    })
+  );
+}
+
+export async function getTextObject(key: string): Promise<string | null> {
+  const s3 = createS3Client();
+  const { bucketName } = getBucketConfig();
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    const body = res.Body as any;
+    if (body?.transformToString) return await body.transformToString("utf-8");
+    // Fallback (streams Node)
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) chunks.push(Buffer.from(chunk));
+    return Buffer.concat(chunks).toString("utf-8");
+  } catch (e: any) {
+    if (e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404) return null;
+    throw e;
+  }
+}
+
 export async function deleteFile(cloud_storage_path: string): Promise<void> {
   const s3 = createS3Client();
   const { bucketName } = getBucketConfig();

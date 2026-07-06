@@ -28,6 +28,8 @@ export const config = {
     "/dashboard/:path*",
     "/os/:path*",
     "/equipamentos/:path*",
+    "/checklist/:path*",
+    "/testes-carga/:path*",
     "/relatorios/:path*",
     "/scanner/:path*",
   ],
