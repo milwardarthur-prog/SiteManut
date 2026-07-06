@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const equipments = await prisma.equipment.findMany({
       where,
       include: { _count: { select: { workOrders: true, files: true } } },
-      orderBy: { createdAt: "desc" },
+      orderBy: { name: "asc" },
     });
     return NextResponse.json(equipments);
   } catch {

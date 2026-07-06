@@ -5,13 +5,10 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Plus, Search, Filter, Loader2, ClipboardList, ArrowRight,
-  CheckCircle2, Clock, AlertTriangle, XCircle, Pause,
+  Plus, Loader2, ClipboardList, ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const statusLabels: Record<string, string> = {
@@ -38,31 +35,95 @@ const typeLabels: Record<string, string> = {
   RETRABALHO: "Retrabalho",
 };
 
+const scopeLabels: Record<string, string> = {
+  NORMAL: "Normal",
+  CHECKLIST: "Checklist",
+  TESTE_CARGA: "Teste de Carga",
+};
+
+const scopeColors: Record<string, string> = {
+  NORMAL: "bg-gray-100 text-gray-700",
+  CHECKLIST: "bg-teal-100 text-teal-800",
+  TESTE_CARGA: "bg-indigo-100 text-indigo-800",
+};
+
+// Tabs seguem o fluxo de status atual
+const TABS: { key: string; label: string }[] = [
+  { key: "sem_tecnico", label: "Abertas sem técnico" },
+  { key: "com_tecnico", label: "Abertas com técnico" },
+  { key: "pendente", label: "Pendente de Aprovação" },
+  { key: "aprovada", label: "Aprovada" },
+  { key: "em_execucao", label: "Em Execução" },
+  { key: "aguardando", label: "Aguardando Encerramento" },
+  { key: "finalizadas", label: "Finalizadas" },
+  { key: "rejeitadas", label: "Rejeitadas/Excluídas" },
+];
+
 export default function OSListClient() {
   const { data: session } = useSession() || {};
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [activeTab, setActiveTab] = useState("sem_tecnico");
+  const [technicianFilter, setTechnicianFilter] = useState("");
+  const [equipmentFilter, setEquipmentFilter] = useState("");
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [equipments, setEquipments] = useState<any[]>([]);
 
   const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   useEffect(() => {
+    // Carrega listas de filtro uma vez
+    (async () => {
+      try {
+        const [tRes, eRes] = await Promise.all([
+          fetch("/api/users/technicians"),
+          fetch("/api/equipamentos"),
+        ]);
+        if (tRes.ok) setTechnicians(await tRes.json());
+        if (eRes.ok) setEquipments(await eRes.json());
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  useEffect(() => {
     fetchOrders();
-  }, [statusFilter, typeFilter]);
+  }, [activeTab, technicianFilter, equipmentFilter]);
+
+  useEffect(() => {
+    fetchCounts();
+  }, [technicianFilter, equipmentFilter]);
+
+  const buildParams = (tab: string) => {
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    if (technicianFilter) params.set("technicianId", technicianFilter);
+    if (equipmentFilter) params.set("equipmentId", equipmentFilter);
+    return params;
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.set("status", statusFilter);
-      if (typeFilter) params.set("type", typeFilter);
-      const res = await fetch(`/api/os?${params.toString()}`);
+      const res = await fetch(`/api/os?${buildParams(activeTab).toString()}`);
       if (res.ok) setOrders(await res.json());
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCounts = async () => {
+    try {
+      const results = await Promise.all(
+        TABS.map(async (t) => {
+          const res = await fetch(`/api/os?${buildParams(t.key).toString()}`);
+          const data = res.ok ? await res.json() : [];
+          return [t.key, Array.isArray(data) ? data.length : 0] as [string, number];
+        })
+      );
+      setCounts(Object.fromEntries(results));
+    } catch { /* ignore */ }
   };
 
   return (
@@ -83,30 +144,56 @@ export default function OSListClient() {
         </Link>
       </div>
 
-      {/* Filters */}
+      {/* Filters: técnico e equipamento */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <Select value={statusFilter} onValueChange={(v: string) => setStatusFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filtrar por status" />
+        <Select value={technicianFilter || "all"} onValueChange={(v: string) => setTechnicianFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-full sm:w-56">
+            <SelectValue placeholder="Filtrar por técnico" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os Status</SelectItem>
-            {Object.entries(statusLabels).map(([k, v]: [string, string]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
+            <SelectItem value="all">Todos os Técnicos</SelectItem>
+            {(technicians ?? []).map((t: any) => (
+              <SelectItem key={t?.id} value={t?.id}>{t?.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={typeFilter} onValueChange={(v: string) => setTypeFilter(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filtrar por tipo" />
+        <Select value={equipmentFilter || "all"} onValueChange={(v: string) => setEquipmentFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-full sm:w-56">
+            <SelectValue placeholder="Filtrar por equipamento" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os Tipos</SelectItem>
-            {Object.entries(typeLabels).map(([k, v]: [string, string]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
+            <SelectItem value="all">Todos os Equipamentos</SelectItem>
+            {(equipments ?? []).map((e: any) => (
+              <SelectItem key={e?.id} value={e?.id}>
+                {e?.name} ({e?.equipmentNumber})
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Tabs por status */}
+      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-200">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-md transition-colors border-b-2 ${
+              activeTab === t.key
+                ? "border-orange-500 text-orange-600"
+                : "border-transparent text-muted-foreground hover:text-gray-900"
+            }`}
+          >
+            {t.label}
+            {counts[t.key] != null && (
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === t.key ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+              }`}>
+                {counts[t.key]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Orders list */}
@@ -143,12 +230,22 @@ export default function OSListClient() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-medium">
                           {typeLabels[order?.maintenanceType] ?? order?.maintenanceType}
                         </span>
+                        {order?.scope && order.scope !== "NORMAL" && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${scopeColors[order?.scope] ?? "bg-gray-100 text-gray-700"}`}>
+                            {scopeLabels[order?.scope] ?? order?.scope}
+                          </span>
+                        )}
+                        {order?.deletedAt && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800 font-medium">
+                            Excluída
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-900 font-medium mt-1">
                         {order?.equipment?.name ?? ""} ({order?.equipment?.equipmentNumber ?? ""})
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Técnico: {order?.technician?.name ?? "-"}
+                        Técnico: {order?.technician?.name ?? "Sem técnico"}
                       </p>
                     </div>
                   </div>

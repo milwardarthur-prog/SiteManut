@@ -28,6 +28,12 @@ enum WorkOrderStatus {
   REJEITADA
 }
 
+enum OSScope {
+  NORMAL
+  CHECKLIST
+  TESTE_CARGA
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -41,6 +47,7 @@ model User {
   createdOrders  WorkOrder[]       @relation("CreatorOrders")
   closedOrders   WorkOrder[]       @relation("CloserOrders")
   helperRecords  WorkOrderHelper[]
+  authoredComments WorkOrderComment[] @relation("CommentAuthor")
 }
 
 model Equipment {
@@ -111,6 +118,7 @@ model WorkOrder {
   orderNumber     Int             @unique @default(autoincrement())
   status          WorkOrderStatus @default(PENDENTE_APROVACAO)
   maintenanceType MaintenanceType
+  scope           OSScope         @default(NORMAL)
   horimeter       Float?          
   comments        String?         
   adminNotes      String?         
@@ -120,9 +128,24 @@ model WorkOrder {
   techClosedAt    DateTime?       
   closedAt        DateTime?       
   totalTimeMinutes Int?           
+  deletedAt       DateTime?       
 
-  technicianId    String
-  technician      User            @relation("TechnicianOrders", fields: [technicianId], references: [id])
+  // Campos específicos de CHECKLIST
+  checklistDate    DateTime?
+  tankSample       String?
+  checkFuelFilter1 String?
+  checkFuelFilter2 String?
+  checkFuelFilter3 String?
+
+  // Campos específicos de TESTE DE CARGA
+  loadTestDate     DateTime?
+  voltageEmpty     String?
+  frequencyEmpty   String?
+  load             String?
+  frequencyLoad    String?
+
+  technicianId    String?
+  technician      User?           @relation("TechnicianOrders", fields: [technicianId], references: [id])
   createdById     String
   createdBy       User            @relation("CreatorOrders", fields: [createdById], references: [id])
   closedById      String?
@@ -133,11 +156,27 @@ model WorkOrder {
   parts           WorkOrderPart[]
   helpers         WorkOrderHelper[]
   photos          WorkOrderPhoto[]
+  technicalComments WorkOrderComment[]
 
   @@index([status])
   @@index([technicianId])
   @@index([equipmentId])
   @@index([createdAt])
+  @@index([scope])
+  @@index([deletedAt])
+}
+
+model WorkOrderComment {
+  id          String    @id @default(cuid())
+  content     String
+  createdAt   DateTime  @default(now())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  @@index([workOrderId])
+  @@index([authorId])
 }
 
 model WorkOrderPart {

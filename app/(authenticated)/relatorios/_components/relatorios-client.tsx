@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Calendar, BarChart3 } from "lucide-react";
+import { Loader2, Calendar, BarChart3, FileSpreadsheet } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,32 @@ export default function RelatoriosClient() {
   const [loading, setLoading] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+      const res = await fetch(`/api/os/export?${params.toString()}`);
+      if (!res.ok) { toast.error("Erro ao gerar planilha"); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `relatorio-os-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Planilha gerada!");
+    } catch {
+      toast.error("Erro ao exportar");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "authenticated" && (session?.user as any)?.role !== "ADMIN") {
@@ -60,6 +87,10 @@ export default function RelatoriosClient() {
             <Button onClick={fetchStats} disabled={loading} className="bg-orange-500 hover:bg-orange-600 text-white">
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <BarChart3 className="w-4 h-4 mr-1" />}
               Gerar Relatório
+            </Button>
+            <Button onClick={exportExcel} disabled={exporting} variant="outline" className="border-green-600 text-green-700 hover:bg-green-50">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <FileSpreadsheet className="w-4 h-4 mr-1" />}
+              Exportar Excel (Checklist / Teste de Carga)
             </Button>
           </div>
         </CardContent>
