@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { dataKey, getTextObject, putTextObject } from "@/lib/s3";
+import { prisma } from "@/lib/db";
 
-const CSV_KEY = "checklist.csv";
+const DATA_KEY = "checklist_csv";
 // Colunas esperadas (mesmo formato do site original)
 const EXPECTED_HEADER = "Equipamento";
 
@@ -15,9 +15,10 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   try {
-    const csv = await getTextObject(dataKey(CSV_KEY));
-    return NextResponse.json({ csv: csv ?? "" });
-  } catch {
+    const row = await prisma.dataStore.findUnique({ where: { key: DATA_KEY } });
+    return NextResponse.json({ csv: row?.content ?? "" });
+  } catch (e: any) {
+    console.error("[checklist GET] erro ao ler CSV:", e);
     return NextResponse.json({ error: "Erro ao ler dados" }, { status: 500 });
   }
 }
@@ -42,9 +43,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    await putTextObject(dataKey(CSV_KEY), csv);
+    await prisma.dataStore.upsert({
+      where: { key: DATA_KEY },
+      update: { content: csv },
+      create: { key: DATA_KEY, content: csv },
+    });
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e: any) {
+    console.error("[checklist POST] erro ao salvar CSV:", e);
     return NextResponse.json({ error: "Erro ao salvar dados" }, { status: 500 });
   }
 }

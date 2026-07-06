@@ -111,7 +111,9 @@ export async function getFileUrl(
 // Chave fixa: cada gravação sobrescreve o conteúdo anterior ("substituir tudo").
 export function dataKey(name: string): string {
   const { folderPrefix } = getBucketConfig();
-  return `${folderPrefix}data/${name}`;
+  // Usa o prefixo "uploads/" (mesmo dos anexos, já autorizado nas políticas do bucket)
+  // para evitar AccessDenied em um prefixo novo.
+  return `${folderPrefix}uploads/data/${name}`;
 }
 
 export async function putTextObject(

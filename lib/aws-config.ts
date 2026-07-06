@@ -8,5 +8,7 @@ export function getBucketConfig() {
 }
 
 export function createS3Client() {
-  return new S3Client({});
+  return new S3Client({
+    region: process.env.AWS_REGION ?? "us-east-1",
+  });
 }
