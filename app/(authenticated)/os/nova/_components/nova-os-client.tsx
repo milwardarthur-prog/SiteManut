@@ -154,11 +154,7 @@ export default function NovaOSClient() {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        if (scope === "CHECKLIST" || scope === "TESTE_CARGA") {
-          toast.success("OS criada em Aguardando Encerramento!");
-        } else {
-          toast.success(isAdmin ? "OS criada e aprovada!" : "OS criada e enviada para aprovação!");
-        }
+        toast.success(isAdmin ? "OS criada e aprovada!" : "OS criada e enviada para aprovação!");
         router.replace("/os");
       } else {
         const data = await res.json();
@@ -248,14 +244,9 @@ export default function NovaOSClient() {
               </div>
             )}
 
-            {(scope === "CHECKLIST" || scope === "TESTE_CARGA") && (
+            {(scope === "CHECKLIST" || scope === "TESTE_CARGA" || scope === "REVISAO") && (
               <p className="text-xs bg-blue-50 text-blue-700 rounded-md px-3 py-2">
-                Esta OS será registrada como <strong>Manutenção Preventiva</strong> e irá direto para <strong>Aguardando Encerramento</strong> (fora do fluxo normal de aprovação).
-              </p>
-            )}
-            {scope === "REVISAO" && (
-              <p className="text-xs bg-blue-50 text-blue-700 rounded-md px-3 py-2">
-                Esta OS será registrada como <strong>Manutenção Preventiva</strong>.
+                Esta OS será registrada como <strong>Manutenção Preventiva</strong> e seguirá o fluxo normal de aprovação.
               </p>
             )}
 

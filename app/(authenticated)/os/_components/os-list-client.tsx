@@ -15,6 +15,7 @@ const statusLabels: Record<string, string> = {
   PENDENTE_APROVACAO: "Pendente Aprovação",
   APROVADA: "Aprovada",
   EM_EXECUCAO: "Em Execução",
+  PAUSADA: "Pausada",
   AGUARDANDO_ENCERRAMENTO: "Aguard. Encerramento",
   FINALIZADA: "Finalizada",
   REJEITADA: "Rejeitada",
@@ -24,6 +25,7 @@ const statusColors: Record<string, string> = {
   PENDENTE_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADA: "bg-blue-100 text-blue-800",
   EM_EXECUCAO: "bg-orange-100 text-orange-800",
+  PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
   FINALIZADA: "bg-green-100 text-green-800",
   REJEITADA: "bg-red-100 text-red-800",
@@ -51,11 +53,12 @@ const scopeColors: Record<string, string> = {
 
 // Tabs seguem o fluxo de status atual
 const TABS: { key: string; label: string }[] = [
-  { key: "sem_tecnico", label: "Abertas sem técnico" },
+  { key: "sem_tecnico", label: "Disponíveis pra pegar" },
   { key: "com_tecnico", label: "Abertas com técnico" },
   { key: "pendente", label: "Pendente de Aprovação" },
   { key: "aprovada", label: "Aprovada" },
   { key: "em_execucao", label: "Em Execução" },
+  { key: "pausada", label: "Pausadas" },
   { key: "aguardando", label: "Aguardando Encerramento" },
   { key: "finalizadas", label: "Finalizadas" },
   { key: "rejeitadas", label: "Rejeitadas/Excluídas" },

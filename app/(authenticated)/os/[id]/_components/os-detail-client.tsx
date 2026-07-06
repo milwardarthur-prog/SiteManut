@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, Play, StopCircle,
   Plus, Trash2, UserPlus, Camera, MessageSquare, Wrench, Clock,
   FileText, Users, Package, Save, Settings, Gauge, ClipboardCheck,
-  Zap, Send, Droplet,
+  Zap, Send, Droplet, Pause, HandMetal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ const statusLabels: Record<string, string> = {
   PENDENTE_APROVACAO: "Pendente Aprovação",
   APROVADA: "Aprovada",
   EM_EXECUCAO: "Em Execução",
+  PAUSADA: "Pausada",
   AGUARDANDO_ENCERRAMENTO: "Aguard. Encerramento",
   FINALIZADA: "Finalizada",
   REJEITADA: "Rejeitada",
@@ -33,6 +34,7 @@ const statusColors: Record<string, string> = {
   PENDENTE_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADA: "bg-blue-100 text-blue-800",
   EM_EXECUCAO: "bg-orange-100 text-orange-800",
+  PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
   FINALIZADA: "bg-green-100 text-green-800",
   REJEITADA: "bg-red-100 text-red-800",
@@ -148,12 +150,18 @@ export default function OSDetailClient({ id }: { id: string }) {
   }
 
   const status = order?.status ?? "";
-  const canStart = status === "APROVADA" && (isAdmin || order?.technicianId === userId);
-  const canTechClose = status === "EM_EXECUCAO" && (isAdmin || order?.technicianId === userId);
+  const isMine = order?.technicianId === userId;
+  const canStart = status === "APROVADA" && (isAdmin || isMine);
+  const canTechClose = status === "EM_EXECUCAO" && (isAdmin || isMine);
   const canAdminClose = status === "AGUARDANDO_ENCERRAMENTO" && isAdmin;
   const canApprove = status === "PENDENTE_APROVACAO" && isAdmin;
-  const canEdit = ["APROVADA", "EM_EXECUCAO"].includes(status);
+  const canEdit = ["APROVADA", "EM_EXECUCAO", "PAUSADA"].includes(status);
   const isExecuting = status === "EM_EXECUCAO";
+  // Pegar OS sem técnico designado (técnico ocioso ou gestor)
+  const canClaim = !order?.technicianId && !order?.deletedAt && ["PENDENTE_APROVACAO", "APROVADA"].includes(status);
+  // Pausar / retomar — técnico responsável ou gestor
+  const canPause = status === "EM_EXECUCAO" && (isAdmin || isMine);
+  const canResume = status === "PAUSADA" && (isAdmin || isMine);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -202,9 +210,24 @@ export default function OSDetailClient({ id }: { id: string }) {
               </Button>
             </>
           )}
+          {canClaim && (
+            <Button onClick={() => doAction("claim")} disabled={actionLoading} className="bg-cyan-600 hover:bg-cyan-700 text-white">
+              <HandMetal className="w-4 h-4 mr-1" /> {status === "APROVADA" ? "Pegar e Iniciar" : "Pegar OS"}
+            </Button>
+          )}
           {canStart && (
             <Button onClick={() => doAction("start")} disabled={actionLoading} className="bg-orange-500 hover:bg-orange-600 text-white">
               <Play className="w-4 h-4 mr-1" /> Iniciar Execução
+            </Button>
+          )}
+          {canPause && (
+            <Button onClick={() => doAction("pause")} disabled={actionLoading} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+              <Pause className="w-4 h-4 mr-1" /> Pausar
+            </Button>
+          )}
+          {canResume && (
+            <Button onClick={() => doAction("resume")} disabled={actionLoading} className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Play className="w-4 h-4 mr-1" /> Retomar
             </Button>
           )}
           {canTechClose && (

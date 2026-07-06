@@ -9,9 +9,6 @@ import { prisma } from "@/lib/db";
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
 const LOADTEST_FIELDS = ["voltageEmpty", "frequencyEmpty", "load", "frequencyLoad"] as const;
 
-// Escopos que ficam fora do fluxo normal e já entram em "Aguardando Encerramento"
-const AUTO_AGUARDANDO_SCOPES = ["CHECKLIST", "TESTE_CARGA"];
-
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -45,6 +42,9 @@ export async function GET(req: NextRequest) {
     // Lógica das abas do painel
     switch (tab) {
       case "sem_tecnico":
+        // OS disponíveis para qualquer técnico assumir — remove a restrição
+        // de propriedade para que técnicos também vejam as OS sem responsável.
+        delete where.OR;
         where.technicianId = null;
         where.deletedAt = null;
         where.status = { notIn: ["FINALIZADA", "REJEITADA"] };
@@ -64,6 +64,10 @@ export async function GET(req: NextRequest) {
         break;
       case "em_execucao":
         where.status = "EM_EXECUCAO";
+        where.deletedAt = null;
+        break;
+      case "pausada":
+        where.status = "PAUSADA";
         where.deletedAt = null;
         break;
       case "aguardando":
@@ -150,14 +154,9 @@ export async function POST(req: NextRequest) {
       assignedTech = user?.id;
     }
 
-    // Checklist e Teste de Carga ficam fora do fluxo normal: já entram em
-    // "Aguardando Encerramento". Demais escopos seguem o fluxo de aprovação.
-    let initialStatus: string;
-    if (AUTO_AGUARDANDO_SCOPES.includes(scope)) {
-      initialStatus = "AGUARDANDO_ENCERRAMENTO";
-    } else {
-      initialStatus = isAdmin ? "APROVADA" : "PENDENTE_APROVACAO";
-    }
+    // Todos os escopos seguem o fluxo normal de aprovação.
+    // Gestor cria já aprovada; técnico cria pendente de aprovação.
+    const initialStatus: string = isAdmin ? "APROVADA" : "PENDENTE_APROVACAO";
 
     const data: any = {
       status: initialStatus,

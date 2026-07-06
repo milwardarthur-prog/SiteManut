@@ -38,6 +38,33 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         data.startedAt = new Date();
         break;
 
+      case "claim": {
+        // Técnico (ou gestor) pega uma OS que está sem técnico designado
+        if (current.technicianId) return NextResponse.json({ error: "Esta OS já possui um técnico responsável" }, { status: 400 });
+        if (!["PENDENTE_APROVACAO", "APROVADA"].includes(current.status)) {
+          return NextResponse.json({ error: "Esta OS não está mais disponível para ser assumida" }, { status: 400 });
+        }
+        data.technicianId = user?.id;
+        // Se já está aprovada, o técnico já inicia a execução no mesmo ato
+        if (current.status === "APROVADA") {
+          data.status = "EM_EXECUCAO";
+          data.startedAt = new Date();
+        }
+        break;
+      }
+
+      case "pause":
+        if (current.status !== "EM_EXECUCAO") return NextResponse.json({ error: "Só é possível pausar uma OS em execução" }, { status: 400 });
+        if (!isAdmin && current.technicianId !== user?.id) return NextResponse.json({ error: "Apenas o técnico responsável ou o gestor podem pausar" }, { status: 403 });
+        data.status = "PAUSADA";
+        break;
+
+      case "resume":
+        if (current.status !== "PAUSADA") return NextResponse.json({ error: "A OS precisa estar pausada" }, { status: 400 });
+        if (!isAdmin && current.technicianId !== user?.id) return NextResponse.json({ error: "Apenas o técnico responsável ou o gestor podem retomar" }, { status: 403 });
+        data.status = "EM_EXECUCAO";
+        break;
+
       case "tech_close":
         if (current.status !== "EM_EXECUCAO") return NextResponse.json({ error: "OS precisa estar em execução" }, { status: 400 });
         data.status = "AGUARDANDO_ENCERRAMENTO";
