@@ -7,7 +7,7 @@ export default withAuth(
     const path = req.nextUrl?.pathname ?? "";
 
     // Admin-only routes
-    const adminRoutes = ["/dashboard", "/equipamentos/novo", "/relatorios"];
+    const adminRoutes = ["/dashboard", "/equipamentos/novo", "/relatorios", "/horimetros"];
     const isAdminRoute = adminRoutes.some((r: string) => path.startsWith(r));
 
     if (isAdminRoute && token?.role !== "ADMIN") {
@@ -31,6 +31,7 @@ export const config = {
     "/checklist/:path*",
     "/testes-carga/:path*",
     "/relatorios/:path*",
+    "/horimetros/:path*",
     "/scanner/:path*",
   ],
 };

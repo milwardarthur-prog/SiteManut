@@ -1,11 +1,11 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -36,78 +36,115 @@ enum OSScope {
   REVISAO
 }
 
-model User {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  name           String
-  password       String
-  role           UserRole @default(TECHNICIAN)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+enum ReadingFrequency {
+  SEMANAL
+  QUINZENAL
+  MENSAL
+}
 
-  assignedOrders WorkOrder[]       @relation("TechnicianOrders")
-  createdOrders  WorkOrder[]       @relation("CreatorOrders")
-  closedOrders   WorkOrder[]       @relation("CloserOrders")
-  helperRecords  WorkOrderHelper[]
-  authoredComments WorkOrderComment[] @relation("CommentAuthor")
+enum LeaseStatus {
+  DISPONIVEL
+  LOCADO
+}
+
+enum ReadingSource {
+  MANUAL
+  CSV
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      UserRole @default(TECHNICIAN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedOrders    WorkOrder[]          @relation("TechnicianOrders")
+  createdOrders     WorkOrder[]          @relation("CreatorOrders")
+  closedOrders      WorkOrder[]          @relation("CloserOrders")
+  helperRecords     WorkOrderHelper[]
+  authoredComments  WorkOrderComment[]   @relation("CommentAuthor")
+  horimeterReadings HorimeterReading[]   @relation("ReadingAuthor")
+  frequencyChanges  FrequencyChangeLog[] @relation("FreqChangeAuthor")
+  locationImports   LocationImport[]     @relation("ImportAuthor")
 }
 
 model Equipment {
-  id             String   @id @default(cuid())
-  equipmentNumber String  @unique
-  name           String
-  description    String?
-  model          String?
-  year           Int?
-  currentHorimeter Float  @default(0)
-  location       String?
-  serialNumber   String?
-  qrCodeData     String   @unique
+  id               String  @id @default(cuid())
+  equipmentNumber  String  @unique
+  name             String
+  description      String?
+  model            String?
+  year             Int?
+  currentHorimeter Float   @default(0)
+  location         String?
+  serialNumber     String?
+  qrCodeData       String  @unique
 
   // Filtros
-  airFilter1     String?
-  airFilter2     String?
-  fuelFilter1    String?
-  fuelFilter2    String?
-  fuelFilter3    String?
-  fuelFilter4    String?
-  lubeFilter1    String?
-  lubeFilter2    String?
-  lubeFilter3    String?
-  lubeFilter4    String?
-  waterFilter    String?
+  airFilter1  String?
+  airFilter2  String?
+  fuelFilter1 String?
+  fuelFilter2 String?
+  fuelFilter3 String?
+  fuelFilter4 String?
+  lubeFilter1 String?
+  lubeFilter2 String?
+  lubeFilter3 String?
+  lubeFilter4 String?
+  waterFilter String?
 
   // Componentes
-  controller     String?
-  tank           String?
-  crankcase      String?
-  battery        String?
-  belt1          String?
-  belt2          String?
-  belt3          String?
-  belt4          String?
+  controller String?
+  tank       String?
+  crankcase  String?
+  battery    String?
+  belt1      String?
+  belt2      String?
+  belt3      String?
+  belt4      String?
 
   // Dimensões
-  height         String?
-  width          String?
-  depth          String?
+  height String?
+  width  String?
+  depth  String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  // ── Módulo de controle de horímetro ──
+  // Leitura de horímetro
+  readingFrequency         ReadingFrequency @default(MENSAL)
+  lastReadingDate          DateTime?
+  nextReadingDate          DateTime?
+  // Locação (separado do status operacional / de OS)
+  leaseStatus              LeaseStatus      @default(DISPONIVEL)
+  currentClient            String?
+  lastLocationUpdate       DateTime?
+  locationSource           ReadingSource?
+  // Manutenção preventiva por horímetro
+  lastMaintenanceHorimeter Float?
+  maintenanceIntervalHours Float?
 
-  files          EquipmentFile[]
-  workOrders     WorkOrder[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  files             EquipmentFile[]
+  workOrders        WorkOrder[]
+  horimeterReadings HorimeterReading[]
+  frequencyChanges  FrequencyChangeLog[]
 
   @@index([equipmentNumber])
+  @@index([leaseStatus])
+  @@index([nextReadingDate])
 }
 
 model EquipmentFile {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   fileName         String
   cloudStoragePath String
-  contentType      String   @default("application/pdf")
-  isPublic         Boolean  @default(false)
-  fileSize         Int?     
+  contentType      String    @default("application/pdf")
+  isPublic         Boolean   @default(false)
+  fileSize         Int?
   equipmentId      String
   equipment        Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())
@@ -116,21 +153,21 @@ model EquipmentFile {
 }
 
 model WorkOrder {
-  id              String          @id @default(cuid())
-  orderNumber     Int             @unique @default(autoincrement())
-  status          WorkOrderStatus @default(PENDENTE_APROVACAO)
-  maintenanceType MaintenanceType
-  scope           OSScope         @default(NORMAL)
-  horimeter       Float?          
-  comments        String?         
-  adminNotes      String?         
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  startedAt       DateTime?       
-  techClosedAt    DateTime?       
-  closedAt        DateTime?       
-  totalTimeMinutes Int?           
-  deletedAt       DateTime?       
+  id               String          @id @default(cuid())
+  orderNumber      Int             @unique @default(autoincrement())
+  status           WorkOrderStatus @default(PENDENTE_APROVACAO)
+  maintenanceType  MaintenanceType
+  scope            OSScope         @default(NORMAL)
+  horimeter        Float?
+  comments         String?
+  adminNotes       String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  startedAt        DateTime?
+  techClosedAt     DateTime?
+  closedAt         DateTime?
+  totalTimeMinutes Int?
+  deletedAt        DateTime?
 
   // Campos específicos de CHECKLIST
   checklistDate    DateTime?
@@ -140,29 +177,29 @@ model WorkOrder {
   checkFuelFilter3 String?
 
   // Campos específicos de TESTE DE CARGA
-  loadTestDate     DateTime?
-  voltageEmpty     String?
-  frequencyEmpty   String?
-  load             String?
-  frequencyLoad    String?
+  loadTestDate   DateTime?
+  voltageEmpty   String?
+  frequencyEmpty String?
+  load           String?
+  frequencyLoad  String?
 
   // Campos específicos de REVISÃO (troca de óleo e filtros)
-  revisionDate     DateTime?
-  oilLiters        String?
-  revisionFilters  String?   // JSON: { "fuelFilter1": "TROCADO" | "NAO", ... }
+  revisionDate    DateTime?
+  oilLiters       String?
+  revisionFilters String? // JSON: { "fuelFilter1": "TROCADO" | "NAO", ... }
 
-  technicianId    String?
-  technician      User?           @relation("TechnicianOrders", fields: [technicianId], references: [id])
-  createdById     String
-  createdBy       User            @relation("CreatorOrders", fields: [createdById], references: [id])
-  closedById      String?
-  closedBy        User?           @relation("CloserOrders", fields: [closedById], references: [id])
-  equipmentId     String
-  equipment       Equipment       @relation(fields: [equipmentId], references: [id])
+  technicianId String?
+  technician   User?     @relation("TechnicianOrders", fields: [technicianId], references: [id])
+  createdById  String
+  createdBy    User      @relation("CreatorOrders", fields: [createdById], references: [id])
+  closedById   String?
+  closedBy     User?     @relation("CloserOrders", fields: [closedById], references: [id])
+  equipmentId  String
+  equipment    Equipment @relation(fields: [equipmentId], references: [id])
 
-  parts           WorkOrderPart[]
-  helpers         WorkOrderHelper[]
-  photos          WorkOrderPhoto[]
+  parts             WorkOrderPart[]
+  helpers           WorkOrderHelper[]
+  photos            WorkOrderPhoto[]
   technicalComments WorkOrderComment[]
 
   @@index([status])
@@ -230,4 +267,48 @@ model DataStore {
   content   String   @db.Text
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+}
+
+model HorimeterReading {
+  id          String        @id @default(cuid())
+  equipmentId String
+  equipment   Equipment     @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  readingDate DateTime // data em que a leitura foi coletada em campo
+  value       Float // valor do horímetro lido
+  source      ReadingSource @default(MANUAL)
+  note        String?       @db.Text
+  createdById String
+  createdBy   User          @relation("ReadingAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now()) // data/hora do lançamento no sistema
+
+  @@index([equipmentId])
+  @@index([readingDate])
+}
+
+model FrequencyChangeLog {
+  id            String            @id @default(cuid())
+  equipmentId   String
+  equipment     Equipment         @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  previousValue ReadingFrequency?
+  newValue      ReadingFrequency
+  reason        String?           @db.Text
+  createdById   String
+  createdBy     User              @relation("FreqChangeAuthor", fields: [createdById], references: [id])
+  createdAt     DateTime          @default(now())
+
+  @@index([equipmentId])
+}
+
+model LocationImport {
+  id             String   @id @default(cuid())
+  fileName       String
+  leasedCount    Int      @default(0)
+  availableCount Int      @default(0)
+  errorCount     Int      @default(0)
+  summary        String?  @db.Text // JSON com resumo das alterações
+  createdById    String
+  createdBy      User     @relation("ImportAuthor", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
 }
