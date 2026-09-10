@@ -6,17 +6,37 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { normalizeCode } from "@/lib/horimetro";
 
-// Identifica as colunas de equipamento e cliente de forma tolerante a variações.
-function pickColumns(fields: string[]): { eqCol?: string; clientCol?: string } {
+// Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
+// Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
+// Equipamentos" completo exportado do sistema de patrimônio, que traz todos os ativos
+// da empresa (cabos, tanques, etc.) — não só geradores — com o código em "Patrimônio"
+// e a categoria (ex.: "GERADOR ...") em "Equipamento".
+function pickColumns(fields: string[]): {
+  eqCol?: string;
+  obraCol?: string;
+  clientCol?: string;
+  categoryCol?: string;
+  statusCol?: string;
+} {
   const norm = (s: string) => normalizeCode(s).toLowerCase();
-  let eqCol: string | undefined;
+  let patrimCol: string | undefined;
+  let equipCol: string | undefined;
+  let obraCol: string | undefined;
   let clientCol: string | undefined;
+  let statusCol: string | undefined;
   for (const f of fields) {
     const n = norm(f);
-    if (!eqCol && (n.includes("equip") || n === "ge" || n.includes("codigo") || n.includes("código"))) eqCol = f;
-    if (!clientCol && (n.includes("client") || n.includes("local") || n.includes("obra"))) clientCol = f;
+    if (!patrimCol && n.includes("patrim")) patrimCol = f;
+    if (!equipCol && (n.includes("equip") || n === "ge" || n.includes("codigo") || n.includes("código"))) equipCol = f;
+    if (!obraCol && n.includes("obra")) obraCol = f;
+    if (!clientCol && (n.includes("client") || n.includes("local"))) clientCol = f;
+    if (!statusCol && n.includes("status")) statusCol = f;
   }
-  return { eqCol, clientCol };
+  // Quando existe uma coluna "Patrimônio" separada, ela é o código real do equipamento
+  // e "Equipamento" vira apenas a categoria, usada para filtrar só os geradores.
+  const eqCol = patrimCol ?? equipCol;
+  const categoryCol = patrimCol && equipCol && equipCol !== patrimCol ? equipCol : undefined;
+  return { eqCol, obraCol, clientCol, categoryCol, statusCol };
 }
 
 type PreviewResult = {
@@ -36,11 +56,11 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     transformHeader: (h) => h.trim(),
   });
   const fields = parsed.meta?.fields ?? [];
-  const { eqCol, clientCol } = pickColumns(fields);
-  if (!eqCol || !clientCol) {
+  const { eqCol, obraCol, clientCol, categoryCol, statusCol } = pickColumns(fields);
+  if (!eqCol || (!obraCol && !clientCol)) {
     return {
       error:
-        "Não foi possível identificar as colunas. O CSV deve ter uma coluna de equipamento e uma de cliente (ex.: 'equipamento,cliente').",
+        "Não foi possível identificar as colunas. O CSV deve ter uma coluna de equipamento (ou Patrimônio) e uma de cliente/obra.",
     };
   }
 
@@ -51,10 +71,24 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
 
   rows.forEach((row, idx) => {
     const line = idx + 2; // +1 header +1 base-1
+
+    // No mapa completo de patrimônio, a maioria das linhas não é gerador
+    // (cabos, tanques, abraçadeiras...) — ignora silenciosamente essas linhas.
+    if (categoryCol) {
+      const category = normalizeCode(row[categoryCol]).toLowerCase();
+      if (!category.includes("gerador")) return;
+    }
+
+    // Locações encerradas/inativas não contam como "atualmente locado".
+    if (statusCol) {
+      const st = normalizeCode(row[statusCol]).toLowerCase();
+      if (st && st !== "ativo") return;
+    }
+
     const rawCode = row[eqCol!];
-    const rawClient = row[clientCol!];
+    const rawClient = (clientCol ? row[clientCol] : "")?.trim() || (obraCol ? row[obraCol] : "")?.trim() || "";
     const code = normalizeCode(rawCode);
-    const client = (rawClient ?? "").trim();
+    const client = rawClient.trim();
     if (!code) {
       errorRows.push({ line, message: "Equipamento vazio" });
       return;

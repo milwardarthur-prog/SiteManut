@@ -135,6 +135,7 @@ export default function HorimetrosClient() {
   const [lancarOpen, setLancarOpen] = useState(false);
   const [localizacaoOpen, setLocalizacaoOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [selected, setSelected] = useState<Row | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -265,54 +266,32 @@ export default function HorimetrosClient() {
         <div className="text-sm text-gray-500 pb-2">{filtered.length} equipamento(s)</div>
       </div>
 
-      {/* Tabela mestre — todas as informações em uma tela só */}
+      {/* Tabela mestre — clique num equipamento para ver todos os detalhes */}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
             <tr>
               <Th>Equipamento</Th>
-              <Th>Cliente/Local</Th>
-              <Th>Frequência</Th>
-              <Th>Situação</Th>
+              <Th>Cliente</Th>
               <Th>Última leitura</Th>
               <Th className="text-right">Horímetro atual</Th>
-              <Th>Próxima leitura</Th>
-              <Th className="text-right">Média (h/dia)</Th>
-              <Th>Confiança</Th>
-              <Th className="text-right">Próx. revisão (h)</Th>
-              <Th className="text-right">Horas restantes</Th>
-              <Th>Previsão</Th>
-              <Th></Th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {filtered.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr
+                key={r.id}
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => setSelected(r)}
+              >
                 <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
                 <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
-                <Td className="whitespace-nowrap">{FREQUENCY_LABELS[r.readingFrequency]}</Td>
-                <Td><PendBadge status={r.pendingStatus} daysLate={r.daysLate} /></Td>
                 <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
                 <Td className="text-right">{fmtNum(r.currentHorimeter)}</Td>
-                <Td className="whitespace-nowrap">{fmtDate(r.nextReadingDate)}</Td>
-                <Td className="text-right">{fmtNum(r.consumption.hoursPerDay)}</Td>
-                <Td><ConfBadge c={r.consumption.confidence} /></Td>
-                <Td className="text-right">{fmtNum(r.prediction.nextMaintenanceHorimeter)}</Td>
-                <Td className="text-right">{fmtNum(r.prediction.hoursRemaining)}</Td>
-                <Td className="whitespace-nowrap">
-                  {r.prediction.estimatedDate ? (
-                    <span>{fmtDate(r.prediction.estimatedDate)} <span className="text-gray-400">({r.prediction.estimatedDays}d)</span></span>
-                  ) : "—"}
-                </Td>
-                <Td>
-                  <Button size="sm" variant="ghost" className="gap-1" onClick={() => setEditing(r)}>
-                    <Settings2 className="w-4 h-4" /> Ajustar
-                  </Button>
-                </Td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={13} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={4} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
@@ -348,9 +327,72 @@ export default function HorimetrosClient() {
         </SheetContent>
       </Sheet>
 
+      {selected && (
+        <DetailDialog
+          row={rows.find((r) => r.id === selected.id) ?? selected}
+          onClose={() => setSelected(null)}
+          onAjustar={(r) => setEditing(r)}
+        />
+      )}
+
       {editing && (
         <AjustarDialog row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
+    </div>
+  );
+}
+
+// ═══ DIÁLOGO: DETALHES DO EQUIPAMENTO ═════════════════════════════════════════
+function DetailDialog({ row, onClose, onAjustar }: { row: Row; onClose: () => void; onAjustar: (row: Row) => void }) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Gauge className="w-5 h-5 text-orange-500" /> {row.equipmentNumber}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <LeaseBadge status={row.leaseStatus} client={row.currentClient} />
+            <PendBadge status={row.pendingStatus} daysLate={row.daysLate} />
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <DetailField label="Frequência de leitura" value={FREQUENCY_LABELS[row.readingFrequency]} />
+            <DetailField label="Última leitura" value={fmtDate(row.lastReadingDate)} />
+            <DetailField label="Horímetro atual" value={fmtNum(row.currentHorimeter)} />
+            <DetailField label="Próxima leitura" value={fmtDate(row.nextReadingDate)} />
+            <DetailField label="Média de consumo" value={`${fmtNum(row.consumption.hoursPerDay)} h/dia`} />
+            <DetailField label="Confiança" value={<ConfBadge c={row.consumption.confidence} />} />
+            <DetailField label="Próx. revisão (horímetro)" value={fmtNum(row.prediction.nextMaintenanceHorimeter)} />
+            <DetailField label="Horas restantes p/ revisão" value={fmtNum(row.prediction.hoursRemaining)} />
+            <DetailField
+              label="Previsão da próxima revisão"
+              value={
+                row.prediction.estimatedDate
+                  ? <>{fmtDate(row.prediction.estimatedDate)} <span className="text-gray-400">({row.prediction.estimatedDays}d)</span></>
+                  : "—"
+              }
+            />
+          </dl>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => onAjustar(row)}>
+            <Settings2 className="w-4 h-4" /> Ajustar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-gray-500">{label}</dt>
+      <dd className="font-medium text-gray-900">{value}</dd>
     </div>
   );
 }
@@ -623,6 +665,28 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
   );
 }
 
+// Detecta a codificação do arquivo (BOM ou UTF-16 "cru", comum em exportações do
+// Windows/Excel) para não corromper acentos ao ler o CSV.
+function decodeCsvBuffer(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(bytes.slice(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(bytes.slice(2));
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder("utf-8").decode(bytes.slice(3));
+  }
+  const sampleLen = Math.min(bytes.length, 2000);
+  let zeroCount = 0;
+  for (let i = 0; i < sampleLen; i++) if (bytes[i] === 0) zeroCount++;
+  if (sampleLen > 0 && zeroCount / sampleLen > 0.25) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
 // ═══ PAINEL: LOCALIZAÇÃO (CSV) ═════════════════════════════════════════════════
 function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -648,11 +712,11 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
     setFileName(f.name);
     const reader = new FileReader();
     reader.onload = () => {
-      const text = String(reader.result ?? "");
+      const text = decodeCsvBuffer(reader.result as ArrayBuffer);
       setCsv(text);
       doPreview(text, f.name);
     };
-    reader.readAsText(f);
+    reader.readAsArrayBuffer(f);
   };
 
   const doPreview = async (text: string, name: string) => {
