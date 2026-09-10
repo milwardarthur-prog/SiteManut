@@ -3,41 +3,13 @@
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  ClipboardList,
-  ClipboardCheck,
-  Zap,
-  Wrench,
-  BarChart3,
-  ScanLine,
-  Gauge,
-  LogOut,
-  Settings,
-  Menu,
-  X,
-  ChevronLeft,
-} from "lucide-react";
+import { Gauge, LogOut, Settings, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
-const adminLinks = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
-  { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
-  { href: "/horimetros", label: "Horímetros", icon: Gauge },
-  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
-  { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
-  { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { href: "/scanner", label: "Escanear QR", icon: ScanLine },
-];
+const adminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
 
-const techLinks = [
-  { href: "/os", label: "Minhas OS", icon: ClipboardList },
-  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
-  { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
-  { href: "/scanner", label: "Escanear QR", icon: ScanLine },
-];
+const techLinks: typeof adminLinks = [];
 
 export default function AppSidebar({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession() || {};
@@ -65,7 +37,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
         }`}
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
-          <Link href={isAdmin ? "/dashboard" : "/os"} className="flex items-center gap-3">
+          <Link href={isAdmin ? "/horimetros" : "/os"} className="flex items-center gap-3">
             <div className="w-9 h-9 bg-orange-500 rounded-lg flex items-center justify-center">
               <Settings className="w-5 h-5 text-white" />
             </div>
