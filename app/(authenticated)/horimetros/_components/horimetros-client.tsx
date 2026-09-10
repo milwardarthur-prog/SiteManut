@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   FileWarning,
   ClipboardList,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { FREQUENCY_LABELS } from "@/lib/horimetro";
 
@@ -335,6 +347,7 @@ export default function HorimetrosClient() {
           row={rows.find((r) => r.id === selected.id) ?? selected}
           onClose={() => setSelected(null)}
           onAjustar={(r) => setEditing(r)}
+          onDeleted={() => { setSelected(null); load(); }}
         />
       )}
 
@@ -346,7 +359,17 @@ export default function HorimetrosClient() {
 }
 
 // ═══ DIÁLOGO: DETALHES DO EQUIPAMENTO ═════════════════════════════════════════
-function DetailDialog({ row, onClose, onAjustar }: { row: Row; onClose: () => void; onAjustar: (row: Row) => void }) {
+function DetailDialog({
+  row,
+  onClose,
+  onAjustar,
+  onDeleted,
+}: {
+  row: Row;
+  onClose: () => void;
+  onAjustar: (row: Row) => void;
+  onDeleted: () => void;
+}) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
@@ -380,14 +403,72 @@ function DetailDialog({ row, onClose, onAjustar }: { row: Row; onClose: () => vo
             />
           </dl>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
-          <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => onAjustar(row)}>
-            <Settings2 className="w-4 h-4" /> Ajustar
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          <DeleteEquipmentButton row={row} onDeleted={onDeleted} />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Fechar</Button>
+            <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => onAjustar(row)}>
+              <Settings2 className="w-4 h-4" /> Ajustar
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ═══ AÇÃO: EXCLUIR EQUIPAMENTO ═════════════════════════════════════════════════
+function DeleteEquipmentButton({ row, onDeleted }: { row: Row; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async (e: React.MouseEvent) => {
+    e.preventDefault(); // mantém o diálogo aberto até a exclusão terminar
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/equipamentos/${row.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao excluir equipamento.");
+        return;
+      }
+      toast.success(`${row.equipmentNumber} excluído.`);
+      setOpen(false);
+      onDeleted();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-2">
+          <Trash2 className="w-4 h-4" /> Excluir
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir {row.equipmentNumber}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Essa ação remove o equipamento e todo o histórico de leituras de horímetro dele — não pode ser desfeita.
+            Se houver ordens de serviço vinculadas a ele, a exclusão será bloqueada.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            onClick={confirmDelete}
+            disabled={deleting}
+          >
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Excluir"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

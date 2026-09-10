@@ -80,3 +80,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: error?.message ?? "Erro ao atualizar equipamento" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if ((session.user as any)?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Apenas gestores podem excluir equipamentos" }, { status: 403 });
+  }
+
+  try {
+    const workOrderCount = await prisma.workOrder.count({ where: { equipmentId: params?.id } });
+    if (workOrderCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Não é possível excluir: existem ${workOrderCount} ordem(ns) de serviço vinculada(s) a este equipamento.`,
+        },
+        { status: 400 }
+      );
+    }
+    await prisma.equipment.delete({ where: { id: params?.id } });
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    if (error?.code === "P2025") {
+      return NextResponse.json({ error: "Equipamento não encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({ error: error?.message ?? "Erro ao excluir equipamento" }, { status: 500 });
+  }
+}
