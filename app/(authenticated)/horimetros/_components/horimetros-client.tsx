@@ -28,6 +28,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -287,7 +288,9 @@ export default function HorimetrosClient() {
                 <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
                 <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
                 <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
-                <Td className="text-right">{fmtNum(r.currentHorimeter)}</Td>
+                <Td className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <QuickReading row={r} onSaved={load} />
+                </Td>
               </tr>
             ))}
             {filtered.length === 0 && (
@@ -394,6 +397,105 @@ function DetailField({ label, value }: { label: string; value: React.ReactNode }
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="font-medium text-gray-900">{value}</dd>
     </div>
+  );
+}
+
+// ═══ ATALHO: LANÇAR LEITURA DIRETO NA TABELA ═════════════════════════════════
+function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [warning, setWarning] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setValue("");
+    setWarning(null);
+  };
+
+  const submit = async (confirmed: boolean) => {
+    const parsed = parseFloat(value);
+    if (Number.isNaN(parsed)) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const readingDate = new Date().toISOString().slice(0, 10);
+      const res = await fetch("/api/horimetros/leituras", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          readings: [{ equipmentId: row.id, readingDate, value: parsed, note: "", confirmed }],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao lançar leitura.");
+        return;
+      }
+      if (data.needsConfirmation) {
+        setWarning(data.warnings?.[0]?.message ?? "Confirme para prosseguir.");
+        return;
+      }
+      toast.success(`Horímetro de ${row.equipmentNumber} atualizado.`);
+      setOpen(false);
+      reset();
+      onSaved();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="font-medium text-gray-900 hover:text-orange-600 hover:underline underline-offset-2"
+        >
+          {fmtNum(row.currentHorimeter)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Novo horímetro</label>
+            <Input
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              autoFocus
+              value={value}
+              onChange={(e) => { setValue(e.target.value); setWarning(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && value !== "") submit(!!warning); }}
+              placeholder={fmtNum(row.currentHorimeter)}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Data da leitura: hoje ({fmtDate(new Date().toISOString())})
+            </p>
+          </div>
+          {warning && (
+            <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {warning}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            {warning ? (
+              <Button size="sm" className="bg-amber-500 hover:bg-amber-600" disabled={saving} onClick={() => submit(true)}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar mesmo assim"}
+              </Button>
+            ) : (
+              <Button size="sm" className="bg-orange-500 hover:bg-orange-600" disabled={saving || value === ""} onClick={() => submit(false)}>
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -884,8 +986,20 @@ function MiniStat({ label, value, color = "text-gray-800" }: { label: string; va
 function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return <th className={`text-left font-medium px-3 py-2 ${className}`}>{children}</th>;
 }
-function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2 ${className}`}>{children}</td>;
+function Td({
+  children,
+  className = "",
+  onClick,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  onClick?: (e: React.MouseEvent<HTMLTableCellElement>) => void;
+}) {
+  return (
+    <td className={`px-3 py-2 ${className}`} onClick={onClick}>
+      {children}
+    </td>
+  );
 }
 function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { v: string; t: string }[] }) {
   return (
