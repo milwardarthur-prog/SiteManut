@@ -97,13 +97,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
-    // Locação manual — equipamento locado sem contrato ativo no relatório (não
-    // aparece na importação de CSV), ou liberação manual de volta a disponível.
-    if (body?.manualClient !== undefined) {
+    // Status manual de locação — usado tanto para marcar um equipamento locado
+    // sem contrato ativo (não aparece na importação de CSV) quanto para marcá-lo
+    // em manutenção, ou devolvê-lo a disponível.
+    if (body?.manualStatus !== undefined) {
+      const status = String(body.manualStatus);
+      if (!["LOCADO", "DISPONIVEL", "MANUTENCAO"].includes(status)) {
+        return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+      }
       const client = typeof body.manualClient === "string" ? body.manualClient.trim() : "";
-      data.leaseStatus = client ? "LOCADO" : "DISPONIVEL";
-      data.currentClient = client || null;
-      data.location = client || "";
+      if (status === "LOCADO" && !client) {
+        return NextResponse.json({ error: "Informe o cliente" }, { status: 400 });
+      }
+      data.leaseStatus = status;
+      data.currentClient = status === "LOCADO" ? client : null;
+      data.location = status === "LOCADO" ? client : "";
       data.locationSource = "MANUAL";
       data.lastLocationUpdate = new Date();
     }

@@ -118,11 +118,16 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .filter(([code]) => baseSet.has(code))
     .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
 
-  // Equipamentos locados sem contrato ativo (marcados manualmente) não aparecem
-  // no relatório — preserva a locação em vez de marcar como disponível.
+  // Equipamentos locados sem contrato ativo ou em manutenção (marcados
+  // manualmente) não aparecem no relatório — preserva o status em vez de
+  // marcar como disponível.
   const manualPreserved = allEquip.filter((e) => {
     const code = normalizeCode(e.equipmentNumber);
-    return e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO" && !leaseMap.has(code);
+    return (
+      e.locationSource === "MANUAL" &&
+      (e.leaseStatus === "LOCADO" || e.leaseStatus === "MANUTENCAO") &&
+      !leaseMap.has(code)
+    );
   }).length;
 
   return {
@@ -221,8 +226,8 @@ export async function POST(req: NextRequest) {
             }),
           ];
         }
-        if (e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO") {
-          return []; // preserva a locação manual
+        if (e.locationSource === "MANUAL" && (e.leaseStatus === "LOCADO" || e.leaseStatus === "MANUTENCAO")) {
+          return []; // preserva a locação/manutenção manual
         }
         return [
           prisma.equipment.update({

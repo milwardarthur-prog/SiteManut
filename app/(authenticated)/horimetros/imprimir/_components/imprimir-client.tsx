@@ -14,7 +14,7 @@ type Row = {
   readingFrequency: "SEMANAL" | "QUINZENAL" | "MENSAL";
   lastReadingDate: string | null;
   nextReadingDate: string | null;
-  leaseStatus: "DISPONIVEL" | "LOCADO";
+  leaseStatus: "DISPONIVEL" | "LOCADO" | "MANUTENCAO";
   currentClient: string | null;
   pendingStatus: "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
@@ -58,6 +58,7 @@ export default function ImprimirClient() {
       if (situacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
       if (situacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (situacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
+      if (situacao === "manutencao" && r.leaseStatus !== "MANUTENCAO") return false;
       return true;
     });
   }, [rows, cliente, freq, situacao]);
@@ -86,6 +87,7 @@ export default function ImprimirClient() {
     sem_leitura: "Sem leitura",
     locados: "Locados",
     disponiveis: "Disponíveis",
+    manutencao: "Em manutenção",
     todos: "Todos",
   };
 
@@ -130,7 +132,15 @@ export default function ImprimirClient() {
               <tr key={r.id} className="border-b border-gray-300">
                 <td className="py-2.5 pr-2 text-gray-500">{i + 1}</td>
                 <td className="py-2.5 pr-2 font-medium">{r.equipmentNumber}</td>
-                <td className="py-2.5 pr-2">{r.leaseStatus === "LOCADO" ? (r.currentClient || "Locado") : "Disponível"}</td>
+                <td className="py-2.5 pr-2">
+                  {r.leaseStatus === "MANUTENCAO" ? (
+                    <span className="text-red-600 font-semibold">Manutenção</span>
+                  ) : r.leaseStatus === "LOCADO" ? (
+                    r.currentClient || "Locado"
+                  ) : (
+                    "Disponível"
+                  )}
+                </td>
                 <td className="py-2.5 pr-2">{fmtDate(r.lastReadingDate)}</td>
                 <td className="py-2.5 pr-2 text-right">{fmtNum(r.currentHorimeter)}</td>
                 <td className="py-2.5 pr-2 text-gray-400">______________</td>

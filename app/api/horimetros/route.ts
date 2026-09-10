@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       semLeitura: rows.filter((r) => r.pendingStatus === "SEM_LEITURA").length,
       locados: rows.filter((r) => r.leaseStatus === "LOCADO").length,
       disponiveis: rows.filter((r) => r.leaseStatus === "DISPONIVEL").length,
+      manutencao: rows.filter((r) => r.leaseStatus === "MANUTENCAO").length,
     };
 
     return NextResponse.json({ rows, summary });

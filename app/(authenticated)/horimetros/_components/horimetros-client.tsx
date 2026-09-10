@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Trash2,
   MapPinPlus,
+  Wrench,
   X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,7 @@ type Row = {
   readingFrequency: "SEMANAL" | "QUINZENAL" | "MENSAL";
   lastReadingDate: string | null;
   nextReadingDate: string | null;
-  leaseStatus: "DISPONIVEL" | "LOCADO";
+  leaseStatus: "DISPONIVEL" | "LOCADO" | "MANUTENCAO";
   currentClient: string | null;
   lastLocationUpdate: string | null;
   locationSource: "MANUAL" | "CSV" | null;
@@ -94,6 +95,7 @@ type Summary = {
   semLeitura: number;
   locados: number;
   disponiveis: number;
+  manutencao: number;
 };
 
 // ─── Helpers de formatação ───────────────────────────────────────────────────
@@ -133,6 +135,12 @@ function LeaseBadge({
   client: string | null;
   manual?: boolean;
 }) {
+  if (status === "MANUTENCAO")
+    return (
+      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 whitespace-nowrap">
+        Manutenção
+      </span>
+    );
   if (status === "LOCADO")
     return (
       <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
@@ -160,6 +168,7 @@ export default function HorimetrosClient() {
   const [lancarOpen, setLancarOpen] = useState(false);
   const [localizacaoOpen, setLocalizacaoOpen] = useState(false);
   const [locacaoManualOpen, setLocacaoManualOpen] = useState(false);
+  const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
 
@@ -202,6 +211,7 @@ export default function HorimetrosClient() {
       if (fSituacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
       if (fSituacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (fSituacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
+      if (fSituacao === "manutencao" && r.leaseStatus !== "MANUTENCAO") return false;
       return true;
     });
   }, [rows, search, fCliente, fFreq, fSituacao]);
@@ -253,6 +263,9 @@ export default function HorimetrosClient() {
           <Button onClick={() => setLocacaoManualOpen(true)} variant="outline" className="gap-2">
             <MapPinPlus className="w-4 h-4" /> Locação Manual
           </Button>
+          <Button onClick={() => setManutencaoOpen(true)} variant="outline" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">
+            <Wrench className="w-4 h-4" /> Em Manutenção
+          </Button>
           <Button onClick={imprimir} variant="outline" className="gap-2">
             <Printer className="w-4 h-4" /> Imprimir lista
           </Button>
@@ -261,7 +274,7 @@ export default function HorimetrosClient() {
 
       {/* Resumo — clique num cartão para filtrar a tabela por ele */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <SummaryCard
             label="Total" value={summary.total} icon={<Gauge className="w-4 h-4" />} color="text-gray-700"
             active={fSituacao === "todos"}
@@ -292,6 +305,11 @@ export default function HorimetrosClient() {
             active={fSituacao === "disponiveis"}
             onClick={() => setFSituacao("disponiveis")}
           />
+          <SummaryCard
+            label="Em Manutenção" value={summary.manutencao} icon={<Wrench className="w-4 h-4" />} color="text-red-700"
+            active={fSituacao === "manutencao"}
+            onClick={() => setFSituacao("manutencao")}
+          />
         </div>
       )}
 
@@ -309,6 +327,7 @@ export default function HorimetrosClient() {
           { v: "sem_leitura", t: "Sem leitura" },
           { v: "locados", t: "Locados" },
           { v: "disponiveis", t: "Disponíveis" },
+          { v: "manutencao", t: "Em manutenção" },
         ]} />
         <FilterSelect label="Cliente/Local" value={fCliente} onChange={setFCliente} options={[
           { v: "", t: "Todos" },
@@ -400,6 +419,25 @@ export default function HorimetrosClient() {
           </SheetHeader>
           <div className="mt-4">
             <LocacaoManualPanel rows={rows} onDone={() => { load(); }} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Painel: Equipamentos em Manutenção */}
+      <Sheet open={manutencaoOpen} onOpenChange={setManutencaoOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-red-700" /> Equipamentos em Manutenção
+            </SheetTitle>
+            <SheetDescription>
+              Marque equipamentos fora de operação por manutenção — o cliente aparece como
+              "Manutenção" em vermelho e não são alterados pela importação de CSV enquanto
+              estiverem aqui.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <ManutencaoPanel rows={rows} onDone={() => { load(); }} />
           </div>
         </SheetContent>
       </Sheet>
@@ -982,7 +1020,7 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
       const res = await fetch(`/api/horimetros/${row.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manualClient: client }),
+        body: JSON.stringify({ manualStatus: client ? "LOCADO" : "DISPONIVEL", manualClient: client }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1082,6 +1120,125 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
               ))}
               {filtered.length === 0 && (
                 <tr><td colSpan={4} className="text-center text-gray-400 py-6">Nenhum equipamento encontrado.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ PAINEL: EQUIPAMENTOS EM MANUTENÇÃO ═══════════════════════════════════════
+function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
+  const [search, setSearch] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const emManutencao = useMemo(() => rows.filter((r) => r.leaseStatus === "MANUTENCAO"), [rows]);
+
+  const filtered = useMemo(() => {
+    const t = search.toLowerCase();
+    const base = rows.filter((r) => r.leaseStatus !== "MANUTENCAO");
+    if (!t) return base;
+    return base.filter((r) => r.equipmentNumber.toLowerCase().includes(t));
+  }, [rows, search]);
+
+  const setStatus = async (row: Row, status: "MANUTENCAO" | "DISPONIVEL") => {
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`/api/horimetros/${row.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manualStatus: status }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao salvar.");
+        return;
+      }
+      toast.success(
+        status === "MANUTENCAO" ? `${row.equipmentNumber} marcado em manutenção.` : `${row.equipmentNumber} devolvido ao serviço.`
+      );
+      onDone();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {emManutencao.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-800 mb-2 text-sm">Em manutenção</h3>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <Th>Equipamento</Th>
+                  <Th>Desde</Th>
+                  <Th></Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {emManutencao.map((r) => (
+                  <tr key={r.id}>
+                    <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                    <Td className="whitespace-nowrap">{fmtDate(r.lastLocationUpdate)}</Td>
+                    <Td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-gray-500 hover:text-green-600"
+                        disabled={savingId === r.id}
+                        onClick={() => setStatus(r, "DISPONIVEL")}
+                      >
+                        {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        Devolver ao serviço
+                      </Button>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h3 className="font-semibold text-gray-800 mb-2 text-sm">Marcar equipamento em manutenção</h3>
+        <div className="max-w-xs mb-3">
+          <Input placeholder="Buscar equipamento" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="overflow-x-auto rounded-lg border max-h-[50vh]">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600 sticky top-0">
+              <tr>
+                <Th>Equipamento</Th>
+                <Th>Status atual</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {filtered.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-50">
+                  <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                  <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
+                  <Td>
+                    <Button
+                      size="sm"
+                      className="bg-red-600 hover:bg-red-700 gap-1"
+                      disabled={savingId === r.id}
+                      onClick={() => setStatus(r, "MANUTENCAO")}
+                    >
+                      {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Marcar em manutenção"}
+                    </Button>
+                  </Td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={3} className="text-center text-gray-400 py-6">Nenhum equipamento encontrado.</td></tr>
               )}
             </tbody>
           </table>

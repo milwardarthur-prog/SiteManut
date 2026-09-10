@@ -45,6 +45,7 @@ enum ReadingFrequency {
 enum LeaseStatus {
   DISPONIVEL
   LOCADO
+  MANUTENCAO
 }
 
 enum ReadingSource {
