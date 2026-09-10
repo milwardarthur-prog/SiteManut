@@ -43,6 +43,7 @@ type PreviewResult = {
   foundInFile: number;
   willLease: number;
   willAvailable: number;
+  manualPreserved: number;
   duplicates: string[];
   notInBase: string[];
   errorRows: { line: number; message: string }[];
@@ -106,7 +107,9 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .map(([code]) => code);
 
   // Confere quais códigos existem na base
-  const allEquip = await prisma.equipment.findMany({ select: { equipmentNumber: true } });
+  const allEquip = await prisma.equipment.findMany({
+    select: { equipmentNumber: true, leaseStatus: true, locationSource: true },
+  });
   const baseSet = new Set(allEquip.map((e) => normalizeCode(e.equipmentNumber)));
 
   const notInBase = Array.from(leaseMap.keys()).filter((c) => !baseSet.has(c));
@@ -115,10 +118,18 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .filter(([code]) => baseSet.has(code))
     .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
 
+  // Equipamentos locados sem contrato ativo (marcados manualmente) não aparecem
+  // no relatório — preserva a locação em vez de marcar como disponível.
+  const manualPreserved = allEquip.filter((e) => {
+    const code = normalizeCode(e.equipmentNumber);
+    return e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO" && !leaseMap.has(code);
+  }).length;
+
   return {
     foundInFile: leaseMap.size,
     willLease: validLease.length,
-    willAvailable: baseSet.size - validLease.length,
+    willAvailable: baseSet.size - validLease.length - manualPreserved,
+    manualPreserved,
     duplicates,
     notInBase,
     errorRows,
@@ -187,34 +198,43 @@ export async function POST(req: NextRequest) {
       const leaseCodes = new Set(preview.leaseList.map((l) => l.equipmentNumber));
       const clientByCode = new Map(preview.leaseList.map((l) => [l.equipmentNumber, l.client]));
 
-      // Aplica: marca locados os do CSV; disponíveis os demais.
+      // Aplica: marca locados os do CSV; disponíveis os demais — exceto os
+      // marcados manualmente como locados (sem contrato ativo no relatório),
+      // que são preservados em vez de virarem "disponível" automaticamente.
       const allEquip = await prisma.equipment.findMany({
-        select: { id: true, equipmentNumber: true },
+        select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true },
       });
 
-      const ops = allEquip.map((e) => {
+      const ops = allEquip.flatMap((e) => {
         const code = normalizeCode(e.equipmentNumber);
         if (leaseCodes.has(code)) {
-          return prisma.equipment.update({
+          return [
+            prisma.equipment.update({
+              where: { id: e.id },
+              data: {
+                leaseStatus: "LOCADO",
+                currentClient: clientByCode.get(code) ?? null,
+                location: clientByCode.get(code) ?? "",
+                lastLocationUpdate: now,
+                locationSource: "CSV",
+              },
+            }),
+          ];
+        }
+        if (e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO") {
+          return []; // preserva a locação manual
+        }
+        return [
+          prisma.equipment.update({
             where: { id: e.id },
             data: {
-              leaseStatus: "LOCADO",
-              currentClient: clientByCode.get(code) ?? null,
-              location: clientByCode.get(code) ?? "",
+              leaseStatus: "DISPONIVEL",
+              currentClient: null,
               lastLocationUpdate: now,
               locationSource: "CSV",
             },
-          });
-        }
-        return prisma.equipment.update({
-          where: { id: e.id },
-          data: {
-            leaseStatus: "DISPONIVEL",
-            currentClient: null,
-            lastLocationUpdate: now,
-            locationSource: "CSV",
-          },
-        });
+          }),
+        ];
       });
 
       await prisma.$transaction(ops);

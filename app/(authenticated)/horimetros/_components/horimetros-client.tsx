@@ -18,6 +18,8 @@ import {
   FileWarning,
   ClipboardList,
   Trash2,
+  MapPinPlus,
+  X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +79,7 @@ type Row = {
   leaseStatus: "DISPONIVEL" | "LOCADO";
   currentClient: string | null;
   lastLocationUpdate: string | null;
+  locationSource: "MANUAL" | "CSV" | null;
   lastMaintenanceHorimeter: number | null;
   maintenanceIntervalHours: number | null;
   pendingStatus: "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
@@ -121,11 +124,20 @@ function ConfBadge({ c }: { c: Consumption["confidence"] }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{t}</span>;
 }
 
-function LeaseBadge({ status, client }: { status: Row["leaseStatus"]; client: string | null }) {
+function LeaseBadge({
+  status,
+  client,
+  manual,
+}: {
+  status: Row["leaseStatus"];
+  client: string | null;
+  manual?: boolean;
+}) {
   if (status === "LOCADO")
     return (
-      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800">
+      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
         {client || "Locado"}
+        {manual && <span className="ml-1 text-purple-700" title="Marcado manualmente (sem contrato ativo)">•manual</span>}
       </span>
     );
   return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">Disponível</span>;
@@ -147,6 +159,7 @@ export default function HorimetrosClient() {
 
   const [lancarOpen, setLancarOpen] = useState(false);
   const [localizacaoOpen, setLocalizacaoOpen] = useState(false);
+  const [locacaoManualOpen, setLocacaoManualOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
 
@@ -237,6 +250,9 @@ export default function HorimetrosClient() {
           <Button onClick={() => setLocalizacaoOpen(true)} variant="outline" className="gap-2">
             <MapPin className="w-4 h-4" /> Localização (CSV)
           </Button>
+          <Button onClick={() => setLocacaoManualOpen(true)} variant="outline" className="gap-2">
+            <MapPinPlus className="w-4 h-4" /> Locação Manual
+          </Button>
           <Button onClick={imprimir} variant="outline" className="gap-2">
             <Printer className="w-4 h-4" /> Imprimir lista
           </Button>
@@ -326,7 +342,7 @@ export default function HorimetrosClient() {
                 onClick={() => setSelected(r)}
               >
                 <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
-                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
+                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} manual={r.locationSource === "MANUAL"} /></Td>
                 <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <QuickReading row={r} onSaved={load} />
@@ -370,6 +386,24 @@ export default function HorimetrosClient() {
         </SheetContent>
       </Sheet>
 
+      {/* Painel: Locação Manual (sem contrato ativo no relatório) */}
+      <Sheet open={locacaoManualOpen} onOpenChange={setLocacaoManualOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <MapPinPlus className="w-5 h-5 text-orange-500" /> Locação Manual
+            </SheetTitle>
+            <SheetDescription>
+              Marque equipamentos locados sem contrato ativo — eles não aparecem no relatório de
+              localização e não são alterados pela importação de CSV enquanto estiverem aqui.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <LocacaoManualPanel rows={rows} onDone={() => { load(); }} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {selected && (
         <DetailDialog
           row={rows.find((r) => r.id === selected.id) ?? selected}
@@ -408,7 +442,7 @@ function DetailDialog({
         </DialogHeader>
         <div className="space-y-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <LeaseBadge status={row.leaseStatus} client={row.currentClient} />
+            <LeaseBadge status={row.leaseStatus} client={row.currentClient} manual={row.locationSource === "MANUAL"} />
             <PendBadge status={row.pendingStatus} daysLate={row.daysLate} />
           </div>
 
@@ -923,6 +957,140 @@ function decodeCsvBuffer(buf: ArrayBuffer): string {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
+// ═══ PAINEL: LOCAÇÃO MANUAL (sem contrato ativo no relatório) ═════════════════
+function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
+  const [search, setSearch] = useState("");
+  const [clientDrafts, setClientDrafts] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const manualLocked = useMemo(
+    () => rows.filter((r) => r.leaseStatus === "LOCADO" && r.locationSource === "MANUAL"),
+    [rows]
+  );
+
+  const filtered = useMemo(() => {
+    const t = search.toLowerCase();
+    if (!t) return rows;
+    return rows.filter(
+      (r) => r.equipmentNumber.toLowerCase().includes(t) || (r.currentClient ?? "").toLowerCase().includes(t)
+    );
+  }, [rows, search]);
+
+  const save = async (row: Row, client: string) => {
+    setSavingId(row.id);
+    try {
+      const res = await fetch(`/api/horimetros/${row.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manualClient: client }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao salvar.");
+        return;
+      }
+      toast.success(client ? `${row.equipmentNumber} marcado como locado.` : `${row.equipmentNumber} liberado.`);
+      setClientDrafts((s) => ({ ...s, [row.id]: "" }));
+      onDone();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {manualLocked.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-800 mb-2 text-sm">Locados manualmente</h3>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <Th>Equipamento</Th>
+                  <Th>Cliente</Th>
+                  <Th>Desde</Th>
+                  <Th></Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {manualLocked.map((r) => (
+                  <tr key={r.id}>
+                    <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                    <Td>{r.currentClient}</Td>
+                    <Td className="whitespace-nowrap">{fmtDate(r.lastLocationUpdate)}</Td>
+                    <Td>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-gray-500 hover:text-red-600"
+                        disabled={savingId === r.id}
+                        onClick={() => save(r, "")}
+                      >
+                        {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XIcon className="w-3.5 h-3.5" />}
+                        Liberar
+                      </Button>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <h3 className="font-semibold text-gray-800 mb-2 text-sm">Marcar equipamento como locado</h3>
+        <div className="max-w-xs mb-3">
+          <Input placeholder="Buscar equipamento" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <div className="overflow-x-auto rounded-lg border max-h-[50vh]">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600 sticky top-0">
+              <tr>
+                <Th>Equipamento</Th>
+                <Th>Status atual</Th>
+                <Th>Cliente</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {filtered.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-50">
+                  <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                  <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
+                  <Td>
+                    <Input
+                      className="w-48"
+                      placeholder="Nome do cliente"
+                      value={clientDrafts[r.id] ?? ""}
+                      onChange={(e) => setClientDrafts((s) => ({ ...s, [r.id]: e.target.value }))}
+                    />
+                  </Td>
+                  <Td>
+                    <Button
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 gap-1"
+                      disabled={savingId === r.id || !(clientDrafts[r.id] ?? "").trim()}
+                      onClick={() => save(r, clientDrafts[r.id] ?? "")}
+                    >
+                      {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Marcar locado"}
+                    </Button>
+                  </Td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={4} className="text-center text-gray-400 py-6">Nenhum equipamento encontrado.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══ PAINEL: LOCALIZAÇÃO (CSV) ═════════════════════════════════════════════════
 function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1036,10 +1204,11 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
         <Card>
           <CardContent className="p-4 space-y-3">
             <h3 className="font-semibold text-gray-800">Prévia da importação</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <MiniStat label="No arquivo" value={preview.foundInFile} />
               <MiniStat label="Ficarão locados" value={preview.willLease} color="text-blue-600" />
               <MiniStat label="Ficarão disponíveis" value={preview.willAvailable} color="text-green-600" />
+              <MiniStat label="Mantidos (locação manual)" value={preview.manualPreserved ?? 0} color="text-purple-600" />
               <MiniStat label="Linhas com erro" value={preview.errorRows?.length ?? 0} color="text-red-600" />
             </div>
 
