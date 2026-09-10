@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import Papa from "papaparse";
 import {
   Gauge,
   Loader2,
@@ -14,15 +13,21 @@ import {
   CircleSlash,
   Save,
   MapPin,
-  TrendingUp,
   Settings2,
   CheckCircle2,
   FileWarning,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -122,6 +127,15 @@ export default function HorimetrosClient() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [fCliente, setFCliente] = useState("");
+  const [fFreq, setFFreq] = useState("");
+  const [fSituacao, setFSituacao] = useState("todos");
+  const [search, setSearch] = useState("");
+
+  const [lancarOpen, setLancarOpen] = useState(false);
+  const [localizacaoOpen, setLocalizacaoOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -143,6 +157,33 @@ export default function HorimetrosClient() {
   useEffect(() => {
     if (status === "authenticated") load();
   }, [status]);
+
+  const clientes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.currentClient).filter(Boolean))).sort() as string[],
+    [rows]
+  );
+
+  const filtered = useMemo(() => {
+    const t = search.toLowerCase();
+    return rows.filter((r) => {
+      if (t && !r.equipmentNumber.toLowerCase().includes(t) && !(r.currentClient ?? "").toLowerCase().includes(t)) return false;
+      if (fCliente && r.currentClient !== fCliente) return false;
+      if (fFreq && r.readingFrequency !== fFreq) return false;
+      if (fSituacao === "pendentes" && !["ATRASADO", "VENCE_HOJE", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
+      if (fSituacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
+      if (fSituacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
+      if (fSituacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
+      return true;
+    });
+  }, [rows, search, fCliente, fFreq, fSituacao]);
+
+  const imprimir = () => {
+    const p = new URLSearchParams();
+    if (fCliente) p.set("cliente", fCliente);
+    if (fFreq) p.set("freq", fFreq);
+    if (fSituacao) p.set("situacao", fSituacao);
+    window.open(`/horimetros/imprimir?${p.toString()}`, "_blank");
+  };
 
   if (status === "loading" || (loading && rows.length === 0)) {
     return (
@@ -170,8 +211,19 @@ export default function HorimetrosClient() {
             <Gauge className="w-6 h-6 text-orange-500" /> Controle de Horímetros
           </h1>
           <p className="text-sm text-gray-500">
-            Leituras, pendências, localização e previsão de manutenção.
+            Leituras, pendências, localização e previsão de manutenção — tudo em um só lugar.
           </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setLancarOpen(true)} className="gap-2 bg-orange-500 hover:bg-orange-600">
+            <Save className="w-4 h-4" /> Lançar Leituras
+          </Button>
+          <Button onClick={() => setLocalizacaoOpen(true)} variant="outline" className="gap-2">
+            <MapPin className="w-4 h-4" /> Localização (CSV)
+          </Button>
+          <Button onClick={imprimir} variant="outline" className="gap-2">
+            <Printer className="w-4 h-4" /> Imprimir lista
+          </Button>
         </div>
       </div>
 
@@ -187,27 +239,118 @@ export default function HorimetrosClient() {
         </div>
       )}
 
-      <Tabs defaultValue="pendencias" className="w-full">
-        <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="pendencias">Pendências</TabsTrigger>
-          <TabsTrigger value="lancar">Lançar Leituras</TabsTrigger>
-          <TabsTrigger value="previsao">Previsão & Manutenção</TabsTrigger>
-          <TabsTrigger value="localizacao">Localização (CSV)</TabsTrigger>
-        </TabsList>
+      {/* Filtros */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Buscar</label>
+          <Input placeholder="GE-... ou cliente" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <FilterSelect label="Situação" value={fSituacao} onChange={setFSituacao} options={[
+          { v: "todos", t: "Todos os equipamentos" },
+          { v: "pendentes", t: "Todas pendentes" },
+          { v: "atrasados", t: "Atrasados" },
+          { v: "vence_hoje", t: "Vence hoje" },
+          { v: "sem_leitura", t: "Sem leitura" },
+        ]} />
+        <FilterSelect label="Cliente/Local" value={fCliente} onChange={setFCliente} options={[
+          { v: "", t: "Todos" },
+          ...clientes.map((c) => ({ v: c, t: c })),
+        ]} />
+        <FilterSelect label="Frequência" value={fFreq} onChange={setFFreq} options={[
+          { v: "", t: "Todas" },
+          { v: "SEMANAL", t: "Semanal" },
+          { v: "QUINZENAL", t: "Quinzenal" },
+          { v: "MENSAL", t: "Mensal" },
+        ]} />
+        <div className="text-sm text-gray-500 pb-2">{filtered.length} equipamento(s)</div>
+      </div>
 
-        <TabsContent value="pendencias" className="mt-4">
-          <PendenciasTab rows={rows} />
-        </TabsContent>
-        <TabsContent value="lancar" className="mt-4">
-          <LancarTab rows={rows} onDone={load} />
-        </TabsContent>
-        <TabsContent value="previsao" className="mt-4">
-          <PrevisaoTab rows={rows} onDone={load} />
-        </TabsContent>
-        <TabsContent value="localizacao" className="mt-4">
-          <LocalizacaoTab onDone={load} />
-        </TabsContent>
-      </Tabs>
+      {/* Tabela mestre — todas as informações em uma tela só */}
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-gray-600">
+            <tr>
+              <Th>Equipamento</Th>
+              <Th>Cliente/Local</Th>
+              <Th>Frequência</Th>
+              <Th>Situação</Th>
+              <Th>Última leitura</Th>
+              <Th className="text-right">Horímetro atual</Th>
+              <Th>Próxima leitura</Th>
+              <Th className="text-right">Média (h/dia)</Th>
+              <Th>Confiança</Th>
+              <Th className="text-right">Próx. revisão (h)</Th>
+              <Th className="text-right">Horas restantes</Th>
+              <Th>Previsão</Th>
+              <Th></Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {filtered.map((r) => (
+              <tr key={r.id} className="hover:bg-gray-50">
+                <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
+                <Td className="whitespace-nowrap">{FREQUENCY_LABELS[r.readingFrequency]}</Td>
+                <Td><PendBadge status={r.pendingStatus} daysLate={r.daysLate} /></Td>
+                <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
+                <Td className="text-right">{fmtNum(r.currentHorimeter)}</Td>
+                <Td className="whitespace-nowrap">{fmtDate(r.nextReadingDate)}</Td>
+                <Td className="text-right">{fmtNum(r.consumption.hoursPerDay)}</Td>
+                <Td><ConfBadge c={r.consumption.confidence} /></Td>
+                <Td className="text-right">{fmtNum(r.prediction.nextMaintenanceHorimeter)}</Td>
+                <Td className="text-right">{fmtNum(r.prediction.hoursRemaining)}</Td>
+                <Td className="whitespace-nowrap">
+                  {r.prediction.estimatedDate ? (
+                    <span>{fmtDate(r.prediction.estimatedDate)} <span className="text-gray-400">({r.prediction.estimatedDays}d)</span></span>
+                  ) : "—"}
+                </Td>
+                <Td>
+                  <Button size="sm" variant="ghost" className="gap-1" onClick={() => setEditing(r)}>
+                    <Settings2 className="w-4 h-4" /> Ajustar
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={13} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Painel: Lançar Leituras */}
+      <Sheet open={lancarOpen} onOpenChange={setLancarOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Save className="w-5 h-5 text-orange-500" /> Lançar Leituras
+            </SheetTitle>
+            <SheetDescription>Registre a leitura de horímetro de um ou mais equipamentos.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <LancarPanel rows={rows} onDone={() => { load(); }} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Painel: Localização (CSV) */}
+      <Sheet open={localizacaoOpen} onOpenChange={setLocalizacaoOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-orange-500" /> Localização (CSV)
+            </SheetTitle>
+            <SheetDescription>Atualize em lote qual cliente está com cada equipamento locado.</SheetDescription>
+          </SheetHeader>
+          <div className="mt-4">
+            <LocalizacaoPanel onDone={() => { load(); }} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {editing && (
+        <AjustarDialog row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+      )}
     </div>
   );
 }
@@ -225,103 +368,8 @@ function SummaryCard({ label, value, icon, color }: { label: string; value: numb
   );
 }
 
-// ═══ ABA 1: PENDÊNCIAS ════════════════════════════════════════════════════════
-function PendenciasTab({ rows }: { rows: Row[] }) {
-  const [fCliente, setFCliente] = useState("");
-  const [fFreq, setFFreq] = useState("");
-  const [fSituacao, setFSituacao] = useState("pendentes");
-
-  const clientes = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.currentClient).filter(Boolean))).sort() as string[],
-    [rows]
-  );
-
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      if (fCliente && r.currentClient !== fCliente) return false;
-      if (fFreq && r.readingFrequency !== fFreq) return false;
-      if (fSituacao === "pendentes" && !["ATRASADO", "VENCE_HOJE", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
-      if (fSituacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
-      if (fSituacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
-      if (fSituacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
-      return true;
-    });
-  }, [rows, fCliente, fFreq, fSituacao]);
-
-  const imprimir = () => {
-    const p = new URLSearchParams();
-    if (fCliente) p.set("cliente", fCliente);
-    if (fFreq) p.set("freq", fFreq);
-    if (fSituacao) p.set("situacao", fSituacao);
-    window.open(`/horimetros/imprimir?${p.toString()}`, "_blank");
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <FilterSelect label="Situação" value={fSituacao} onChange={setFSituacao} options={[
-          { v: "pendentes", t: "Todas pendentes" },
-          { v: "atrasados", t: "Atrasados" },
-          { v: "vence_hoje", t: "Vence hoje" },
-          { v: "sem_leitura", t: "Sem leitura" },
-          { v: "todos", t: "Todos os equipamentos" },
-        ]} />
-        <FilterSelect label="Cliente/Local" value={fCliente} onChange={setFCliente} options={[
-          { v: "", t: "Todos" },
-          ...clientes.map((c) => ({ v: c, t: c })),
-        ]} />
-        <FilterSelect label="Frequência" value={fFreq} onChange={setFFreq} options={[
-          { v: "", t: "Todas" },
-          { v: "SEMANAL", t: "Semanal" },
-          { v: "QUINZENAL", t: "Quinzenal" },
-          { v: "MENSAL", t: "Mensal" },
-        ]} />
-        <div className="ml-auto">
-          <Button onClick={imprimir} variant="outline" className="gap-2">
-            <Printer className="w-4 h-4" /> Imprimir lista
-          </Button>
-        </div>
-      </div>
-
-      <div className="text-sm text-gray-500">{filtered.length} equipamento(s)</div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <Th>Equipamento</Th>
-              <Th>Cliente/Local</Th>
-              <Th>Frequência</Th>
-              <Th>Última leitura</Th>
-              <Th className="text-right">Horímetro atual</Th>
-              <Th>Próxima leitura</Th>
-              <Th>Situação</Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filtered.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <Td className="font-medium text-gray-900">{r.equipmentNumber}</Td>
-                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
-                <Td>{FREQUENCY_LABELS[r.readingFrequency]}</Td>
-                <Td>{fmtDate(r.lastReadingDate)}</Td>
-                <Td className="text-right">{fmtNum(r.currentHorimeter)}</Td>
-                <Td>{fmtDate(r.nextReadingDate)}</Td>
-                <Td><PendBadge status={r.pendingStatus} daysLate={r.daysLate} /></Td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={7} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ═══ ABA 2: LANÇAR LEITURAS ═══════════════════════════════════════════════════
-function LancarTab({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
+// ═══ PAINEL: LANÇAR LEITURAS ══════════════════════════════════════════════════
+function LancarPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
   const today = new Date().toISOString().slice(0, 10);
   const [readingDate, setReadingDate] = useState(today);
   const [search, setSearch] = useState("");
@@ -406,9 +454,9 @@ function LancarTab({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border max-h-[60vh]">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
+          <thead className="bg-gray-50 text-gray-600 sticky top-0">
             <tr>
               <Th>Equipamento</Th>
               <Th>Cliente/Local</Th>
@@ -421,9 +469,9 @@ function LancarTab({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
           <tbody className="divide-y">
             {filtered.map((r) => (
               <tr key={r.id} className="hover:bg-gray-50">
-                <Td className="font-medium text-gray-900">{r.equipmentNumber}</Td>
+                <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
                 <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} /></Td>
-                <Td>{fmtDate(r.lastReadingDate)}</Td>
+                <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
                 <Td className="text-right text-gray-500">{fmtNum(r.currentHorimeter)}</Td>
                 <Td>
                   <Input
@@ -481,68 +529,7 @@ function LancarTab({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
   );
 }
 
-// ═══ ABA 3: PREVISÃO & MANUTENÇÃO ═════════════════════════════════════════════
-function PrevisaoTab({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
-  const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<Row | null>(null);
-
-  const filtered = useMemo(() => {
-    const t = search.toLowerCase();
-    return rows.filter((r) => r.equipmentNumber.toLowerCase().includes(t) || (r.currentClient ?? "").toLowerCase().includes(t));
-  }, [rows, search]);
-
-  return (
-    <div className="space-y-4">
-      <div className="max-w-xs">
-        <Input placeholder="Buscar equipamento ou cliente" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <Th>Equipamento</Th>
-              <Th>Freq.</Th>
-              <Th className="text-right">Horímetro atual</Th>
-              <Th className="text-right">Média (h/dia)</Th>
-              <Th>Confiança</Th>
-              <Th className="text-right">Próx. revisão (h)</Th>
-              <Th className="text-right">Horas restantes</Th>
-              <Th>Previsão</Th>
-              <Th></Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filtered.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <Td className="font-medium text-gray-900">{r.equipmentNumber}</Td>
-                <Td>{FREQUENCY_LABELS[r.readingFrequency]}</Td>
-                <Td className="text-right">{fmtNum(r.currentHorimeter)}</Td>
-                <Td className="text-right">{fmtNum(r.consumption.hoursPerDay)}</Td>
-                <Td><ConfBadge c={r.consumption.confidence} /></Td>
-                <Td className="text-right">{fmtNum(r.prediction.nextMaintenanceHorimeter)}</Td>
-                <Td className="text-right">{fmtNum(r.prediction.hoursRemaining)}</Td>
-                <Td>
-                  {r.prediction.estimatedDate ? (
-                    <span>{fmtDate(r.prediction.estimatedDate)} <span className="text-gray-400">({r.prediction.estimatedDays}d)</span></span>
-                  ) : "—"}
-                </Td>
-                <Td>
-                  <Button size="sm" variant="ghost" className="gap-1" onClick={() => setEditing(r)}>
-                    <Settings2 className="w-4 h-4" /> Ajustar
-                  </Button>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {editing && <AjustarDialog row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); onDone(); }} />}
-    </div>
-  );
-}
-
+// ═══ DIÁLOGO: AJUSTAR FREQUÊNCIA / MANUTENÇÃO ═════════════════════════════════
 function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
   const [freq, setFreq] = useState(row.readingFrequency);
   const [reason, setReason] = useState("");
@@ -636,8 +623,8 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
   );
 }
 
-// ═══ ABA 4: LOCALIZAÇÃO (CSV) ═════════════════════════════════════════════════
-function LocalizacaoTab({ onDone }: { onDone: () => void }) {
+// ═══ PAINEL: LOCALIZAÇÃO (CSV) ═════════════════════════════════════════════════
+function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [csv, setCsv] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
@@ -783,7 +770,9 @@ function LocalizacaoTab({ onDone }: { onDone: () => void }) {
       )}
 
       <div>
-        <h3 className="font-semibold text-gray-800 mb-2 text-sm">Histórico de importações</h3>
+        <h3 className="font-semibold text-gray-800 mb-2 text-sm flex items-center gap-2">
+          <ClipboardList className="w-4 h-4" /> Histórico de importações
+        </h3>
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-600">
