@@ -155,10 +155,7 @@ export async function GET() {
     return NextResponse.json({ history });
   } catch (e: any) {
     console.error("[localizacao GET]", e);
-    return NextResponse.json(
-      { error: "Erro ao carregar histórico", debug: e?.message, code: e?.code },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao carregar histórico" }, { status: 500 });
   }
 }
 

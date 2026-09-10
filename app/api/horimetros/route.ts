@@ -83,9 +83,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ rows, summary });
   } catch (e: any) {
     console.error("[horimetros GET]", e);
-    return NextResponse.json(
-      { error: "Erro ao carregar equipamentos", debug: e?.message, code: e?.code },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Erro ao carregar equipamentos" }, { status: 500 });
   }
 }
