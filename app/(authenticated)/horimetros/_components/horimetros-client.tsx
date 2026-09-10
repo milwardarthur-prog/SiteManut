@@ -187,6 +187,8 @@ export default function HorimetrosClient() {
       if (fSituacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
       if (fSituacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
       if (fSituacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
+      if (fSituacao === "locados" && r.leaseStatus !== "LOCADO") return false;
+      if (fSituacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
       return true;
     });
   }, [rows, search, fCliente, fFreq, fSituacao]);
@@ -241,15 +243,39 @@ export default function HorimetrosClient() {
         </div>
       </div>
 
-      {/* Resumo */}
+      {/* Resumo — clique num cartão para filtrar a tabela por ele */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryCard label="Total" value={summary.total} icon={<Gauge className="w-4 h-4" />} color="text-gray-700" />
-          <SummaryCard label="Atrasados" value={summary.atrasados} icon={<AlertTriangle className="w-4 h-4" />} color="text-red-600" />
-          <SummaryCard label="Vence hoje" value={summary.venceHoje} icon={<CalendarClock className="w-4 h-4" />} color="text-amber-600" />
-          <SummaryCard label="Sem leitura" value={summary.semLeitura} icon={<Clock className="w-4 h-4" />} color="text-gray-500" />
-          <SummaryCard label="Locados" value={summary.locados} icon={<MapPin className="w-4 h-4" />} color="text-blue-600" />
-          <SummaryCard label="Disponíveis" value={summary.disponiveis} icon={<CheckCircle2 className="w-4 h-4" />} color="text-green-600" />
+          <SummaryCard
+            label="Total" value={summary.total} icon={<Gauge className="w-4 h-4" />} color="text-gray-700"
+            active={fSituacao === "todos"}
+            onClick={() => { setFSituacao("todos"); setFCliente(""); setFFreq(""); setSearch(""); }}
+          />
+          <SummaryCard
+            label="Atrasados" value={summary.atrasados} icon={<AlertTriangle className="w-4 h-4" />} color="text-red-600"
+            active={fSituacao === "atrasados"}
+            onClick={() => setFSituacao("atrasados")}
+          />
+          <SummaryCard
+            label="Vence hoje" value={summary.venceHoje} icon={<CalendarClock className="w-4 h-4" />} color="text-amber-600"
+            active={fSituacao === "vence_hoje"}
+            onClick={() => setFSituacao("vence_hoje")}
+          />
+          <SummaryCard
+            label="Sem leitura" value={summary.semLeitura} icon={<Clock className="w-4 h-4" />} color="text-gray-500"
+            active={fSituacao === "sem_leitura"}
+            onClick={() => setFSituacao("sem_leitura")}
+          />
+          <SummaryCard
+            label="Locados" value={summary.locados} icon={<MapPin className="w-4 h-4" />} color="text-blue-600"
+            active={fSituacao === "locados"}
+            onClick={() => setFSituacao("locados")}
+          />
+          <SummaryCard
+            label="Disponíveis" value={summary.disponiveis} icon={<CheckCircle2 className="w-4 h-4" />} color="text-green-600"
+            active={fSituacao === "disponiveis"}
+            onClick={() => setFSituacao("disponiveis")}
+          />
         </div>
       )}
 
@@ -265,6 +291,8 @@ export default function HorimetrosClient() {
           { v: "atrasados", t: "Atrasados" },
           { v: "vence_hoje", t: "Vence hoje" },
           { v: "sem_leitura", t: "Sem leitura" },
+          { v: "locados", t: "Locados" },
+          { v: "disponiveis", t: "Disponíveis" },
         ]} />
         <FilterSelect label="Cliente/Local" value={fCliente} onChange={setFCliente} options={[
           { v: "", t: "Todos" },
@@ -580,9 +608,34 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
   );
 }
 
-function SummaryCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
+function SummaryCard({
+  label,
+  value,
+  icon,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <Card>
+    <Card
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={onClick ? `cursor-pointer transition-colors hover:border-orange-300 hover:bg-orange-50/40 ${active ? "border-orange-400 ring-1 ring-orange-300 bg-orange-50/60" : ""}` : ""}
+    >
       <CardContent className="p-3">
         <div className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>
           {icon} {label}

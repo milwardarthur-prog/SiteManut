@@ -56,6 +56,8 @@ export default function ImprimirClient() {
       if (situacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
       if (situacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
       if (situacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
+      if (situacao === "locados" && r.leaseStatus !== "LOCADO") return false;
+      if (situacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
       return true;
     });
   }, [rows, cliente, freq, situacao]);
@@ -82,6 +84,8 @@ export default function ImprimirClient() {
     atrasados: "Atrasados",
     vence_hoje: "Vence hoje",
     sem_leitura: "Sem leitura",
+    locados: "Locados",
+    disponiveis: "Disponíveis",
     todos: "Todos",
   };
 
