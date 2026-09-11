@@ -126,6 +126,21 @@ function ConfBadge({ c }: { c: Consumption["confidence"] }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{t}</span>;
 }
 
+function HoursRemainingBadge({ hours }: { hours: number | null }) {
+  if (hours == null) return <span className="text-gray-400">—</span>;
+  const cls =
+    hours <= 50
+      ? "bg-red-100 text-red-700"
+      : hours <= 100
+      ? "bg-amber-100 text-amber-700"
+      : "bg-green-100 text-green-700";
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${cls}`}>
+      {fmtNum(hours)} h
+    </span>
+  );
+}
+
 function LeaseBadge({
   status,
   client,
@@ -351,6 +366,7 @@ export default function HorimetrosClient() {
               <Th>Cliente</Th>
               <Th>Última leitura</Th>
               <Th className="text-right">Horímetro atual</Th>
+              <Th className="text-right">Horas p/ manutenção</Th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -366,10 +382,13 @@ export default function HorimetrosClient() {
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <QuickReading row={r} onSaved={load} />
                 </Td>
+                <Td className="text-right">
+                  <HoursRemainingBadge hours={r.prediction.hoursRemaining} />
+                </Td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={4} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={5} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
