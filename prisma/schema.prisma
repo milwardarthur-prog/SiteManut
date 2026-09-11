@@ -124,6 +124,7 @@ model Equipment {
   locationSource           ReadingSource?
   // Manutenção preventiva por horímetro
   lastMaintenanceHorimeter Float?
+  lastMaintenanceDate      DateTime?
   maintenanceIntervalHours Float?
 
   createdAt DateTime @default(now())

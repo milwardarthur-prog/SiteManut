@@ -122,6 +122,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       data.lastMaintenanceHorimeter =
         v === "" || v === null ? null : parseFloat(v);
     }
+    if (body?.lastMaintenanceDate !== undefined) {
+      const v = body.lastMaintenanceDate;
+      data.lastMaintenanceDate = v === "" || v === null ? null : new Date(v);
+    }
     if (body?.maintenanceIntervalHours !== undefined) {
       const v = body.maintenanceIntervalHours;
       data.maintenanceIntervalHours =

@@ -8,6 +8,7 @@ import {
   classifyPending,
   computeConsumption,
   predictMaintenance,
+  needsMaintenanceScheduling,
 } from "@/lib/horimetro";
 
 // GET — lista todos os equipamentos com dados do módulo de horímetro,
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
         lastLocationUpdate: true,
         locationSource: true,
         lastMaintenanceHorimeter: true,
+        lastMaintenanceDate: true,
         maintenanceIntervalHours: true,
         horimeterReadings: {
           orderBy: { readingDate: "desc" },
@@ -58,12 +60,18 @@ export async function GET(req: NextRequest) {
         ref: now,
       });
       const { horimeterReadings, ...rest } = e;
+      const needsSchedule = needsMaintenanceScheduling({
+        hoursRemaining: prediction.hoursRemaining,
+        lastMaintenanceDate: e.lastMaintenanceDate,
+        ref: now,
+      });
       return {
         ...rest,
         pendingStatus: pending.status,
         daysLate: pending.daysLate,
         consumption,
         prediction,
+        needsSchedule,
       };
     });
 
@@ -74,7 +82,7 @@ export async function GET(req: NextRequest) {
       total: rows.length,
       atrasados: rows.filter((r) => r.pendingStatus === "ATRASADO").length,
       venceHoje: rows.filter((r) => r.pendingStatus === "VENCE_HOJE").length,
-      semLeitura: rows.filter((r) => r.pendingStatus === "SEM_LEITURA").length,
+      agendarManutencao: rows.filter((r) => r.needsSchedule).length,
       locados: rows.filter((r) => r.leaseStatus === "LOCADO").length,
       disponiveis: rows.filter((r) => r.leaseStatus === "DISPONIVEL").length,
       manutencao: rows.filter((r) => r.leaseStatus === "MANUTENCAO").length,

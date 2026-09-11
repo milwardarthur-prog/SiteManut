@@ -8,7 +8,6 @@ import {
   Printer,
   Upload,
   AlertTriangle,
-  Clock,
   CalendarClock,
   CircleSlash,
   Save,
@@ -82,17 +81,19 @@ type Row = {
   lastLocationUpdate: string | null;
   locationSource: "MANUAL" | "CSV" | null;
   lastMaintenanceHorimeter: number | null;
+  lastMaintenanceDate: string | null;
   maintenanceIntervalHours: number | null;
   pendingStatus: "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   consumption: Consumption;
   prediction: Prediction;
+  needsSchedule: boolean;
 };
 type Summary = {
   total: number;
   atrasados: number;
   venceHoje: number;
-  semLeitura: number;
+  agendarManutencao: number;
   locados: number;
   disponiveis: number;
   manutencao: number;
@@ -223,7 +224,7 @@ export default function HorimetrosClient() {
       if (fSituacao === "pendentes" && !["ATRASADO", "VENCE_HOJE", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
       if (fSituacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
       if (fSituacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
-      if (fSituacao === "sem_leitura" && r.pendingStatus !== "SEM_LEITURA") return false;
+      if (fSituacao === "agendar_manutencao" && !r.needsSchedule) return false;
       if (fSituacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (fSituacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
       if (fSituacao === "manutencao" && r.leaseStatus !== "MANUTENCAO") return false;
@@ -306,9 +307,9 @@ export default function HorimetrosClient() {
             onClick={() => setFSituacao("vence_hoje")}
           />
           <SummaryCard
-            label="Sem leitura" value={summary.semLeitura} icon={<Clock className="w-4 h-4" />} color="text-gray-500"
-            active={fSituacao === "sem_leitura"}
-            onClick={() => setFSituacao("sem_leitura")}
+            label="Agendar Manutenção" value={summary.agendarManutencao} icon={<Wrench className="w-4 h-4" />} color="text-orange-700"
+            active={fSituacao === "agendar_manutencao"}
+            onClick={() => setFSituacao("agendar_manutencao")}
           />
           <SummaryCard
             label="Locados" value={summary.locados} icon={<MapPin className="w-4 h-4" />} color="text-blue-600"
@@ -339,7 +340,7 @@ export default function HorimetrosClient() {
           { v: "pendentes", t: "Todas pendentes" },
           { v: "atrasados", t: "Atrasados" },
           { v: "vence_hoje", t: "Vence hoje" },
-          { v: "sem_leitura", t: "Sem leitura" },
+          { v: "agendar_manutencao", t: "Agendar manutenção" },
           { v: "locados", t: "Locados" },
           { v: "disponiveis", t: "Disponíveis" },
           { v: "manutencao", t: "Em manutenção" },
@@ -501,6 +502,11 @@ function DetailDialog({
           <div className="flex flex-wrap items-center gap-2">
             <LeaseBadge status={row.leaseStatus} client={row.currentClient} manual={row.locationSource === "MANUAL"} />
             <PendBadge status={row.pendingStatus} daysLate={row.daysLate} />
+            {row.needsSchedule && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1">
+                <Wrench className="w-3 h-3" /> Agendar manutenção
+              </span>
+            )}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -510,6 +516,8 @@ function DetailDialog({
             <DetailField label="Próxima leitura" value={fmtDate(row.nextReadingDate)} />
             <DetailField label="Média de consumo" value={`${fmtNum(row.consumption.hoursPerDay)} h/dia`} />
             <DetailField label="Confiança" value={<ConfBadge c={row.consumption.confidence} />} />
+            <DetailField label="Última manutenção (data)" value={fmtDate(row.lastMaintenanceDate)} />
+            <DetailField label="Última manutenção (horímetro)" value={fmtNum(row.lastMaintenanceHorimeter)} />
             <DetailField label="Próx. revisão (horímetro)" value={fmtNum(row.prediction.nextMaintenanceHorimeter)} />
             <DetailField label="Horas restantes p/ revisão" value={fmtNum(row.prediction.hoursRemaining)} />
             <DetailField
@@ -903,6 +911,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
   const [freq, setFreq] = useState(row.readingFrequency);
   const [reason, setReason] = useState("");
   const [lastMaint, setLastMaint] = useState(row.lastMaintenanceHorimeter?.toString() ?? "");
+  const [lastMaintDate, setLastMaintDate] = useState(row.lastMaintenanceDate ? row.lastMaintenanceDate.slice(0, 10) : "");
   const [interval, setInterval] = useState(row.maintenanceIntervalHours?.toString() ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -919,6 +928,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
         readingFrequency: freq,
         reason,
         lastMaintenanceHorimeter: lastMaint,
+        lastMaintenanceDate: lastMaintDate,
         maintenanceIntervalHours: interval,
       };
       const res = await fetch(`/api/horimetros/${row.id}`, {
@@ -973,12 +983,17 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
               <Input type="number" step="0.1" value={lastMaint} onChange={(e) => setLastMaint(e.target.value)} placeholder="ex.: 1200" />
             </div>
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Últ. manut. (data)</label>
+              <Input type="date" value={lastMaintDate} onChange={(e) => setLastMaintDate(e.target.value)} />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Intervalo (horas)</label>
               <Input type="number" step="0.1" value={interval} onChange={(e) => setInterval(e.target.value)} placeholder="ex.: 250" />
             </div>
           </div>
           <p className="text-xs text-gray-500">
             A próxima revisão = últ. manutenção + intervalo. A previsão de data usa a média de consumo recente.
+            Manutenções com mais de 1 ano ou com menos de 50h restantes entram automaticamente em "Agendar Manutenção".
           </p>
         </div>
         <DialogFooter>

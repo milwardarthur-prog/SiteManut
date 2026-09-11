@@ -204,6 +204,25 @@ export function predictMaintenance(params: {
   };
 }
 
+/**
+ * Indica se a manutenção precisa ser agendada: faltam menos de 50 horas
+ * (incluindo valores negativos, já vencidos) ou a última manutenção foi
+ * realizada há mais de um ano.
+ */
+export function needsMaintenanceScheduling(params: {
+  hoursRemaining: number | null | undefined;
+  lastMaintenanceDate: Date | string | null | undefined;
+  ref?: Date;
+}): boolean {
+  const { hoursRemaining, lastMaintenanceDate, ref = new Date() } = params;
+  if (hoursRemaining != null && hoursRemaining < 50) return true;
+  if (lastMaintenanceDate) {
+    const days = diffDays(ref, new Date(lastMaintenanceDate));
+    if (days >= 365) return true;
+  }
+  return false;
+}
+
 /** Normaliza texto para comparação (trim + maiúsculas + colapsa espaços). */
 export function normalizeCode(s: string | null | undefined): string {
   return (s ?? "").trim().toUpperCase().replace(/\s+/g, " ");
