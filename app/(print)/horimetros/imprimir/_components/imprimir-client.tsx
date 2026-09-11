@@ -175,8 +175,8 @@ export default function ImprimirClient() {
 
       <style jsx global>{`
         @media print {
-          nav, aside, header, .print\\:hidden { display: none !important; }
-          body { background: #fff !important; }
+          .print\\:hidden { display: none !important; }
+          body { background: #fff !important; margin: 0 !important; }
           .print-area { width: 100%; }
           @page { margin: 12mm; }
         }
