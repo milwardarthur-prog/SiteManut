@@ -81,7 +81,6 @@ export async function GET(req: NextRequest) {
     const summary = {
       total: rows.length,
       atrasados: rows.filter((r) => r.pendingStatus === "ATRASADO").length,
-      venceHoje: rows.filter((r) => r.pendingStatus === "VENCE_HOJE").length,
       agendarManutencao: rows.filter((r) => r.needsSchedule).length,
       locados: rows.filter((r) => r.leaseStatus === "LOCADO").length,
       disponiveis: rows.filter((r) => r.leaseStatus === "DISPONIVEL").length,

@@ -16,7 +16,7 @@ type Row = {
   nextReadingDate: string | null;
   leaseStatus: "DISPONIVEL" | "LOCADO" | "MANUTENCAO";
   currentClient: string | null;
-  pendingStatus: "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
+  pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   needsSchedule: boolean;
 };
@@ -53,9 +53,8 @@ export default function ImprimirClient() {
     return rows.filter((r) => {
       if (cliente && r.currentClient !== cliente) return false;
       if (freq && r.readingFrequency !== freq) return false;
-      if (situacao === "pendentes" && !["ATRASADO", "VENCE_HOJE", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
+      if (situacao === "pendentes" && !["ATRASADO", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
       if (situacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
-      if (situacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
       if (situacao === "agendar_manutencao" && !r.needsSchedule) return false;
       if (situacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (situacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
@@ -84,7 +83,6 @@ export default function ImprimirClient() {
   const situacaoLabel: Record<string, string> = {
     pendentes: "Pendentes",
     atrasados: "Atrasados",
-    vence_hoje: "Vence hoje",
     agendar_manutencao: "Agendar manutenção",
     locados: "Locados",
     disponiveis: "Disponíveis",

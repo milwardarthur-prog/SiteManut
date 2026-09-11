@@ -54,11 +54,12 @@ export function startOfDay(date: Date): Date {
   return d;
 }
 
-export type PendingStatus = "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
+export type PendingStatus = "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
 
 /**
  * Classifica a pendência de leitura de um equipamento com base na próxima
- * leitura prevista e na data de referência (hoje por padrão).
+ * leitura prevista e na data de referência (hoje por padrão). Leituras que
+ * vencem hoje já contam como atrasadas (daysLate = 0).
  */
 export function classifyPending(
   nextReadingDate: Date | null | undefined,
@@ -68,8 +69,7 @@ export function classifyPending(
   const today = startOfDay(ref);
   const next = startOfDay(new Date(nextReadingDate));
   const late = diffDays(today, next); // positivo => atrasado
-  if (late > 0) return { status: "ATRASADO", daysLate: late };
-  if (late === 0) return { status: "VENCE_HOJE", daysLate: 0 };
+  if (late >= 0) return { status: "ATRASADO", daysLate: late };
   return { status: "EM_DIA", daysLate: 0 };
 }
 

@@ -8,7 +8,6 @@ import {
   Printer,
   Upload,
   AlertTriangle,
-  CalendarClock,
   CircleSlash,
   Save,
   MapPin,
@@ -83,7 +82,7 @@ type Row = {
   lastMaintenanceHorimeter: number | null;
   lastMaintenanceDate: string | null;
   maintenanceIntervalHours: number | null;
-  pendingStatus: "EM_DIA" | "VENCE_HOJE" | "ATRASADO" | "SEM_LEITURA";
+  pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   consumption: Consumption;
   prediction: Prediction;
@@ -92,7 +91,6 @@ type Row = {
 type Summary = {
   total: number;
   atrasados: number;
-  venceHoje: number;
   agendarManutencao: number;
   locados: number;
   disponiveis: number;
@@ -108,8 +106,7 @@ const fmtNum = (n: number | null | undefined) =>
 function PendBadge({ status, daysLate }: { status: Row["pendingStatus"]; daysLate: number }) {
   const map: Record<Row["pendingStatus"], { c: string; t: string }> = {
     EM_DIA: { c: "bg-green-100 text-green-800", t: "Em dia" },
-    VENCE_HOJE: { c: "bg-amber-100 text-amber-800", t: "Vence hoje" },
-    ATRASADO: { c: "bg-red-100 text-red-800", t: `Atrasado ${daysLate}d` },
+    ATRASADO: { c: "bg-red-100 text-red-800", t: daysLate === 0 ? "Atrasado (hoje)" : `Atrasado ${daysLate}d` },
     SEM_LEITURA: { c: "bg-gray-200 text-gray-600", t: "Sem leitura" },
   };
   const { c, t } = map[status];
@@ -221,9 +218,8 @@ export default function HorimetrosClient() {
       if (t && !r.equipmentNumber.toLowerCase().includes(t) && !(r.currentClient ?? "").toLowerCase().includes(t)) return false;
       if (fCliente && r.currentClient !== fCliente) return false;
       if (fFreq && r.readingFrequency !== fFreq) return false;
-      if (fSituacao === "pendentes" && !["ATRASADO", "VENCE_HOJE", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
+      if (fSituacao === "pendentes" && !["ATRASADO", "SEM_LEITURA"].includes(r.pendingStatus)) return false;
       if (fSituacao === "atrasados" && r.pendingStatus !== "ATRASADO") return false;
-      if (fSituacao === "vence_hoje" && r.pendingStatus !== "VENCE_HOJE") return false;
       if (fSituacao === "agendar_manutencao" && !r.needsSchedule) return false;
       if (fSituacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (fSituacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
@@ -302,11 +298,6 @@ export default function HorimetrosClient() {
             onClick={() => setFSituacao("atrasados")}
           />
           <SummaryCard
-            label="Vence hoje" value={summary.venceHoje} icon={<CalendarClock className="w-4 h-4" />} color="text-amber-600"
-            active={fSituacao === "vence_hoje"}
-            onClick={() => setFSituacao("vence_hoje")}
-          />
-          <SummaryCard
             label="Agendar Manutenção" value={summary.agendarManutencao} icon={<Wrench className="w-4 h-4" />} color="text-orange-700"
             active={fSituacao === "agendar_manutencao"}
             onClick={() => setFSituacao("agendar_manutencao")}
@@ -339,7 +330,6 @@ export default function HorimetrosClient() {
           { v: "todos", t: "Todos os equipamentos" },
           { v: "pendentes", t: "Todas pendentes" },
           { v: "atrasados", t: "Atrasados" },
-          { v: "vence_hoje", t: "Vence hoje" },
           { v: "agendar_manutencao", t: "Agendar manutenção" },
           { v: "locados", t: "Locados" },
           { v: "disponiveis", t: "Disponíveis" },
