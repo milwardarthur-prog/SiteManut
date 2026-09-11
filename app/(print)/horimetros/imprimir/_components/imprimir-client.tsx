@@ -203,7 +203,7 @@ export default function ImprimirClient() {
             transform: scale(var(--print-scale, 1));
             transform-origin: top left;
           }
-          @page { margin: 8mm; size: A4; }
+          @page { margin: 8mm; size: A4 portrait; }
         }
       `}</style>
     </div>
