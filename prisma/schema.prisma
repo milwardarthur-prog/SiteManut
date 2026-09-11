@@ -70,6 +70,7 @@ model User {
   horimeterReadings HorimeterReading[]   @relation("ReadingAuthor")
   frequencyChanges  FrequencyChangeLog[] @relation("FreqChangeAuthor")
   locationImports   LocationImport[]     @relation("ImportAuthor")
+  equipmentComments EquipmentComment[]   @relation("EquipmentCommentAuthor")
 }
 
 model Equipment {
@@ -134,10 +135,24 @@ model Equipment {
   workOrders        WorkOrder[]
   horimeterReadings HorimeterReading[]
   frequencyChanges  FrequencyChangeLog[]
+  comments          EquipmentComment[]
 
   @@index([equipmentNumber])
   @@index([leaseStatus])
   @@index([nextReadingDate])
+}
+
+model EquipmentComment {
+  id          String    @id @default(cuid())
+  content     String
+  createdAt   DateTime  @default(now())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation("EquipmentCommentAuthor", fields: [authorId], references: [id])
+
+  @@index([equipmentId])
+  @@index([authorId])
 }
 
 model EquipmentFile {

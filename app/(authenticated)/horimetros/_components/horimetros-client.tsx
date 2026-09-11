@@ -482,7 +482,7 @@ function DetailDialog({
 }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gauge className="w-5 h-5 text-orange-500" /> {row.equipmentNumber}
@@ -519,6 +519,8 @@ function DetailDialog({
               }
             />
           </dl>
+
+          <EquipmentCommentsSection equipmentId={row.id} />
         </div>
         <DialogFooter className="sm:justify-between">
           <DeleteEquipmentButton row={row} onDeleted={onDeleted} />
@@ -531,6 +533,89 @@ function DetailDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ═══ COMENTÁRIOS TÉCNICOS DO EQUIPAMENTO ══════════════════════════════════════
+type EquipmentCommentT = { id: string; content: string; createdAt: string; author: { name: string } | null };
+
+function EquipmentCommentsSection({ equipmentId }: { equipmentId: string }) {
+  const [comments, setComments] = useState<EquipmentCommentT[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/equipamentos/${equipmentId}/comments`);
+      if (res.ok) setComments((await res.json()).comments ?? []);
+    } catch {
+      /* ignore */
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipmentId]);
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/equipamentos/${equipmentId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao salvar comentário.");
+        return;
+      }
+      setText("");
+      setComments((prev) => [data.comment, ...prev]);
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t pt-4">
+      <h3 className="font-semibold text-gray-800 text-sm mb-2 flex items-center gap-1.5">
+        <ClipboardList className="w-4 h-4" /> Comentários técnicos
+      </h3>
+      <div className="flex gap-2 mb-3">
+        <Input
+          placeholder="Adicionar comentário..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !saving) submit(); }}
+        />
+        <Button size="sm" className="bg-orange-500 hover:bg-orange-600 shrink-0" onClick={submit} disabled={saving || !text.trim()}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Adicionar"}
+        </Button>
+      </div>
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {loading && <div className="text-xs text-gray-400">Carregando...</div>}
+        {!loading && comments.length === 0 && (
+          <div className="text-xs text-gray-400">Nenhum comentário ainda.</div>
+        )}
+        {comments.map((c) => (
+          <div key={c.id} className="rounded-lg bg-gray-50 border p-2 text-sm">
+            <p className="text-gray-800 whitespace-pre-wrap">{c.content}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {c.author?.name ?? "—"} · {new Date(c.createdAt).toLocaleString("pt-BR")}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
