@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Loader2, Printer, CircleSlash } from "lucide-react";
@@ -29,39 +29,37 @@ function PrintSection({
   title,
   rows,
   showClient = false,
-  pageBreak = false,
 }: {
   title: string;
   rows: Row[];
   showClient?: boolean;
-  pageBreak?: boolean;
 }) {
   if (rows.length === 0) return null;
   return (
-    <div className={pageBreak ? "print:break-before-page" : ""}>
-      <h2 className="text-base font-bold text-gray-900 mt-6 mb-2 first:mt-0">
+    <div>
+      <h2 className="text-[11px] font-bold text-gray-900 mt-2 mb-0.5 first:mt-0">
         {title} <span className="font-normal text-gray-500">({rows.length})</span>
       </h2>
-      <table className="w-full text-sm border-collapse mb-4">
+      <table className="w-full text-[9px] border-collapse mb-1.5">
         <thead>
-          <tr className="border-b-2 border-gray-800 text-left">
-            <th className="py-2 pr-2">#</th>
-            <th className="py-2 pr-2">Equipamento</th>
-            {showClient && <th className="py-2 pr-2">Cliente</th>}
-            <th className="py-2 pr-2">Última leitura</th>
-            <th className="py-2 pr-2 text-right">Horímetro anterior</th>
-            <th className="py-2 pr-2">Horímetro atual (coletar)</th>
+          <tr className="border-b border-gray-800 text-left">
+            <th className="py-0.5 pr-1">#</th>
+            <th className="py-0.5 pr-1">Equipamento</th>
+            {showClient && <th className="py-0.5 pr-1">Cliente</th>}
+            <th className="py-0.5 pr-1">Últ. leitura</th>
+            <th className="py-0.5 pr-1 text-right">Horím. anterior</th>
+            <th className="py-0.5 pr-1">Horím. atual (coletar)</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={r.id} className="border-b border-gray-300">
-              <td className="py-2.5 pr-2 text-gray-500">{i + 1}</td>
-              <td className="py-2.5 pr-2 font-medium">{r.equipmentNumber}</td>
-              {showClient && <td className="py-2.5 pr-2">{r.currentClient || "—"}</td>}
-              <td className="py-2.5 pr-2">{fmtDate(r.lastReadingDate)}</td>
-              <td className="py-2.5 pr-2 text-right">{fmtNum(r.currentHorimeter)}</td>
-              <td className="py-2.5 pr-2 text-gray-400">______________</td>
+            <tr key={r.id} className="border-b border-gray-200">
+              <td className="py-0.5 pr-1 text-gray-500">{i + 1}</td>
+              <td className="py-0.5 pr-1 font-medium">{r.equipmentNumber}</td>
+              {showClient && <td className="py-0.5 pr-1">{r.currentClient || "—"}</td>}
+              <td className="py-0.5 pr-1">{fmtDate(r.lastReadingDate)}</td>
+              <td className="py-0.5 pr-1 text-right">{fmtNum(r.currentHorimeter)}</td>
+              <td className="py-0.5 pr-1 text-gray-400">__________</td>
             </tr>
           ))}
         </tbody>
@@ -74,6 +72,7 @@ export default function ImprimirClient() {
   const sp = useSearchParams();
   const { data: session, status } = useSession() || {};
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const printAreaRef = useRef<HTMLDivElement>(null);
 
   const cliente = sp?.get("cliente") ?? "";
   const freq = sp?.get("freq") ?? "";
@@ -112,6 +111,28 @@ export default function ImprimirClient() {
   const disponiveis = useMemo(() => filtered.filter((r) => r.leaseStatus === "DISPONIVEL"), [filtered]);
   const emManutencao = useMemo(() => filtered.filter((r) => r.leaseStatus === "MANUTENCAO"), [filtered]);
 
+  // Reduz a escala do conteúdo na impressão para sempre caber em uma única
+  // página, independentemente de quantas linhas houver.
+  useEffect(() => {
+    const el = printAreaRef.current;
+    if (!el) return;
+
+    const applyScale = () => {
+      el.style.removeProperty("--print-scale");
+      // Área útil de uma página A4 com margem de 8mm, em px (96dpi).
+      const USABLE_HEIGHT_PX = ((297 - 8 * 2) / 25.4) * 96;
+      // Precisa de um frame para o navegador recalcular o layout sem a escala.
+      requestAnimationFrame(() => {
+        const naturalHeight = el.scrollHeight;
+        const scale = naturalHeight > 0 ? Math.min(1, USABLE_HEIGHT_PX / naturalHeight) : 1;
+        el.style.setProperty("--print-scale", String(scale));
+      });
+    };
+
+    window.addEventListener("beforeprint", applyScale);
+    return () => window.removeEventListener("beforeprint", applyScale);
+  }, [filtered]);
+
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -148,25 +169,25 @@ export default function ImprimirClient() {
         </Button>
       </div>
 
-      <div className="print-area">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-900">Lista de Coleta de Horímetros</h1>
-          <div className="text-sm text-gray-600 mt-1 flex flex-wrap gap-x-6 gap-y-1">
+      <div ref={printAreaRef} className="print-area">
+        <div className="mb-2">
+          <h1 className="text-base font-bold text-gray-900">Lista de Coleta de Horímetros</h1>
+          <div className="text-[10px] text-gray-600 mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5">
             <span>Emitido em: {new Date().toLocaleDateString("pt-BR")}</span>
             <span>Situação: {situacaoLabel[situacao] ?? situacao}</span>
             {cliente && <span>Cliente/Local: {cliente}</span>}
             {freq && <span>Frequência: {FREQUENCY_LABELS[freq as keyof typeof FREQUENCY_LABELS]}</span>}
             <span>Total: {filtered.length}</span>
           </div>
-          <div className="text-sm text-gray-700 mt-3 flex gap-8">
-            <span>Operador: ______________________________</span>
-            <span>Assinatura: ______________________________</span>
+          <div className="text-[10px] text-gray-700 mt-1 flex gap-6">
+            <span>Operador: ________________________</span>
+            <span>Assinatura: ________________________</span>
           </div>
         </div>
 
         <PrintSection title="Locados" rows={locados} showClient />
-        <PrintSection title="Disponíveis" rows={disponiveis} pageBreak={locados.length > 0} />
-        <PrintSection title="Em Manutenção" rows={emManutencao} pageBreak={locados.length > 0 || disponiveis.length > 0} />
+        <PrintSection title="Disponíveis" rows={disponiveis} />
+        <PrintSection title="Em Manutenção" rows={emManutencao} />
 
         {filtered.length === 0 && (
           <p className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</p>
@@ -177,8 +198,12 @@ export default function ImprimirClient() {
         @media print {
           .print\\:hidden { display: none !important; }
           body { background: #fff !important; margin: 0 !important; }
-          .print-area { width: 100%; }
-          @page { margin: 12mm; }
+          .print-area {
+            width: calc(100% / var(--print-scale, 1));
+            transform: scale(var(--print-scale, 1));
+            transform-origin: top left;
+          }
+          @page { margin: 8mm; size: A4; }
         }
       `}</style>
     </div>
