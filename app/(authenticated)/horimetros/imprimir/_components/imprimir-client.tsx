@@ -25,6 +25,51 @@ const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateS
 const fmtNum = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
+function PrintSection({
+  title,
+  rows,
+  showClient = false,
+  pageBreak = false,
+}: {
+  title: string;
+  rows: Row[];
+  showClient?: boolean;
+  pageBreak?: boolean;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className={pageBreak ? "print:break-before-page" : ""}>
+      <h2 className="text-base font-bold text-gray-900 mt-6 mb-2 first:mt-0">
+        {title} <span className="font-normal text-gray-500">({rows.length})</span>
+      </h2>
+      <table className="w-full text-sm border-collapse mb-4">
+        <thead>
+          <tr className="border-b-2 border-gray-800 text-left">
+            <th className="py-2 pr-2">#</th>
+            <th className="py-2 pr-2">Equipamento</th>
+            {showClient && <th className="py-2 pr-2">Cliente</th>}
+            <th className="py-2 pr-2">Última leitura</th>
+            <th className="py-2 pr-2 text-right">Horímetro anterior</th>
+            <th className="py-2 pr-2">Horímetro atual (coletar)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id} className="border-b border-gray-300">
+              <td className="py-2.5 pr-2 text-gray-500">{i + 1}</td>
+              <td className="py-2.5 pr-2 font-medium">{r.equipmentNumber}</td>
+              {showClient && <td className="py-2.5 pr-2">{r.currentClient || "—"}</td>}
+              <td className="py-2.5 pr-2">{fmtDate(r.lastReadingDate)}</td>
+              <td className="py-2.5 pr-2 text-right">{fmtNum(r.currentHorimeter)}</td>
+              <td className="py-2.5 pr-2 text-gray-400">______________</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function ImprimirClient() {
   const sp = useSearchParams();
   const { data: session, status } = useSession() || {};
@@ -62,6 +107,10 @@ export default function ImprimirClient() {
       return true;
     });
   }, [rows, cliente, freq, situacao]);
+
+  const locados = useMemo(() => filtered.filter((r) => r.leaseStatus === "LOCADO"), [filtered]);
+  const disponiveis = useMemo(() => filtered.filter((r) => r.leaseStatus === "DISPONIVEL"), [filtered]);
+  const emManutencao = useMemo(() => filtered.filter((r) => r.leaseStatus === "MANUTENCAO"), [filtered]);
 
   if (status === "loading" || loading) {
     return (
@@ -115,41 +164,13 @@ export default function ImprimirClient() {
           </div>
         </div>
 
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b-2 border-gray-800 text-left">
-              <th className="py-2 pr-2">#</th>
-              <th className="py-2 pr-2">Equipamento</th>
-              <th className="py-2 pr-2">Cliente/Local</th>
-              <th className="py-2 pr-2">Última leitura</th>
-              <th className="py-2 pr-2 text-right">Horímetro anterior</th>
-              <th className="py-2 pr-2">Horímetro atual (coletar)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r, i) => (
-              <tr key={r.id} className="border-b border-gray-300">
-                <td className="py-2.5 pr-2 text-gray-500">{i + 1}</td>
-                <td className="py-2.5 pr-2 font-medium">{r.equipmentNumber}</td>
-                <td className="py-2.5 pr-2">
-                  {r.leaseStatus === "MANUTENCAO" ? (
-                    <span className="text-red-600 font-semibold">Manutenção</span>
-                  ) : r.leaseStatus === "LOCADO" ? (
-                    r.currentClient || "Locado"
-                  ) : (
-                    "Disponível"
-                  )}
-                </td>
-                <td className="py-2.5 pr-2">{fmtDate(r.lastReadingDate)}</td>
-                <td className="py-2.5 pr-2 text-right">{fmtNum(r.currentHorimeter)}</td>
-                <td className="py-2.5 pr-2 text-gray-400">______________</td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
-            )}
-          </tbody>
-        </table>
+        <PrintSection title="Locados" rows={locados} showClient />
+        <PrintSection title="Disponíveis" rows={disponiveis} pageBreak={locados.length > 0} />
+        <PrintSection title="Em Manutenção" rows={emManutencao} pageBreak={locados.length > 0 || disponiveis.length > 0} />
+
+        {filtered.length === 0 && (
+          <p className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</p>
+        )}
       </div>
 
       <style jsx global>{`
