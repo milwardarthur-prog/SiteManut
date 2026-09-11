@@ -77,7 +77,7 @@ export default function ImprimirClient() {
 
   const cliente = sp?.get("cliente") ?? "";
   const freq = sp?.get("freq") ?? "";
-  const situacao = sp?.get("situacao") ?? "pendentes";
+  const situacao = sp?.get("situacao") ?? "atrasados";
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);

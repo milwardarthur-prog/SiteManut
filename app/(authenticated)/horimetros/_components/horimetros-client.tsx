@@ -232,7 +232,9 @@ export default function HorimetrosClient() {
     const p = new URLSearchParams();
     if (fCliente) p.set("cliente", fCliente);
     if (fFreq) p.set("freq", fFreq);
-    if (fSituacao) p.set("situacao", fSituacao);
+    // Por padrão a lista de coleta traz só os atrasados; se um filtro de
+    // situação específico já estiver selecionado na tela, respeita ele.
+    p.set("situacao", fSituacao === "todos" ? "atrasados" : fSituacao);
     window.open(`/horimetros/imprimir?${p.toString()}`, "_blank");
   };
 
