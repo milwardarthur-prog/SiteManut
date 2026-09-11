@@ -18,6 +18,7 @@ import {
   Trash2,
   MapPinPlus,
   Wrench,
+  History,
   X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,7 @@ type Row = {
   consumption: Consumption;
   prediction: Prediction;
   needsSchedule: boolean;
+  scheduleReason: "HOURS" | "TIME" | "BOTH" | null;
 };
 type Summary = {
   total: number;
@@ -135,6 +137,46 @@ function HoursRemainingBadge({ hours }: { hours: number | null }) {
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${cls}`}>
       {fmtNum(hours)} h
+    </span>
+  );
+}
+
+// Diferencia visualmente as duas prioridades de "Agendar Manutenção":
+// HOURS = horímetro vencido/próximo (urgência mecânica); TIME = mais de um
+// ano sem manutenção (urgência por tempo parado); BOTH = as duas.
+const SCHEDULE_REASON_INFO: Record<
+  NonNullable<Row["scheduleReason"]>,
+  { icon: typeof Gauge; cls: string; label: string; title: string }
+> = {
+  HOURS: {
+    icon: Gauge,
+    cls: "bg-red-100 text-red-700",
+    label: "Horímetro",
+    title: "Faltam menos de 50h para a próxima revisão (ou já venceu)",
+  },
+  TIME: {
+    icon: History,
+    cls: "bg-purple-100 text-purple-700",
+    label: "+1 ano",
+    title: "Mais de 1 ano desde a última manutenção",
+  },
+  BOTH: {
+    icon: AlertTriangle,
+    cls: "bg-red-200 text-red-800",
+    label: "Horímetro + 1 ano",
+    title: "Horímetro vencido/próximo e mais de 1 ano desde a última manutenção",
+  },
+};
+
+function ScheduleReasonBadge({ reason }: { reason: Row["scheduleReason"] }) {
+  if (!reason) return null;
+  const { icon: Icon, cls, label, title } = SCHEDULE_REASON_INFO[reason];
+  return (
+    <span
+      title={title}
+      className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap inline-flex items-center gap-1 ${cls}`}
+    >
+      <Icon className="w-3 h-3" /> {label}
     </span>
   );
 }
@@ -360,6 +402,7 @@ export default function HorimetrosClient() {
               <Th>Última leitura</Th>
               <Th className="text-right">Horímetro atual</Th>
               <Th className="text-right">Horas p/ manutenção</Th>
+              <Th>Motivo</Th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -378,10 +421,13 @@ export default function HorimetrosClient() {
                 <Td className="text-right">
                   <HoursRemainingBadge hours={r.prediction.hoursRemaining} />
                 </Td>
+                <Td>
+                  <ScheduleReasonBadge reason={r.scheduleReason} />
+                </Td>
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
@@ -494,11 +540,7 @@ function DetailDialog({
           <div className="flex flex-wrap items-center gap-2">
             <LeaseBadge status={row.leaseStatus} client={row.currentClient} manual={row.locationSource === "MANUAL"} />
             <PendBadge status={row.pendingStatus} daysLate={row.daysLate} />
-            {row.needsSchedule && (
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1">
-                <Wrench className="w-3 h-3" /> Agendar manutenção
-              </span>
-            )}
+            <ScheduleReasonBadge reason={row.scheduleReason} />
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">

@@ -205,22 +205,30 @@ export function predictMaintenance(params: {
 }
 
 /**
- * Indica se a manutenção precisa ser agendada: faltam menos de 50 horas
- * (incluindo valores negativos, já vencidos) ou a última manutenção foi
- * realizada há mais de um ano.
+ * Motivo pelo qual a manutenção precisa ser agendada:
+ *  - HOURS: faltam menos de 50 horas (incluindo valores negativos, já vencidos)
+ *  - TIME: a última manutenção foi realizada há mais de um ano
+ *  - BOTH: os dois motivos se aplicam
+ *  - null: não precisa agendar
  */
-export function needsMaintenanceScheduling(params: {
+export type MaintenanceScheduleReason = "HOURS" | "TIME" | "BOTH" | null;
+
+export function getMaintenanceScheduleReason(params: {
   hoursRemaining: number | null | undefined;
   lastMaintenanceDate: Date | string | null | undefined;
   ref?: Date;
-}): boolean {
+}): MaintenanceScheduleReason {
   const { hoursRemaining, lastMaintenanceDate, ref = new Date() } = params;
-  if (hoursRemaining != null && hoursRemaining < 50) return true;
+  const hoursTrigger = hoursRemaining != null && hoursRemaining < 50;
+  let timeTrigger = false;
   if (lastMaintenanceDate) {
     const days = diffDays(ref, new Date(lastMaintenanceDate));
-    if (days >= 365) return true;
+    if (days >= 365) timeTrigger = true;
   }
-  return false;
+  if (hoursTrigger && timeTrigger) return "BOTH";
+  if (hoursTrigger) return "HOURS";
+  if (timeTrigger) return "TIME";
+  return null;
 }
 
 /** Normaliza texto para comparação (trim + maiúsculas + colapsa espaços). */

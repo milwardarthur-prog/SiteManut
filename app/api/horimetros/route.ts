@@ -8,7 +8,7 @@ import {
   classifyPending,
   computeConsumption,
   predictMaintenance,
-  needsMaintenanceScheduling,
+  getMaintenanceScheduleReason,
 } from "@/lib/horimetro";
 
 // GET — lista todos os equipamentos com dados do módulo de horímetro,
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         ref: now,
       });
       const { horimeterReadings, ...rest } = e;
-      const needsSchedule = needsMaintenanceScheduling({
+      const scheduleReason = getMaintenanceScheduleReason({
         hoursRemaining: prediction.hoursRemaining,
         lastMaintenanceDate: e.lastMaintenanceDate,
         ref: now,
@@ -71,7 +71,8 @@ export async function GET(req: NextRequest) {
         daysLate: pending.daysLate,
         consumption,
         prediction,
-        needsSchedule,
+        needsSchedule: scheduleReason !== null,
+        scheduleReason,
       };
     });
 
