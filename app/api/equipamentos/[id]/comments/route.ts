@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { syncPainelEquipamentos } from "@/lib/painel-sync";
 
 // GET — lista comentários técnicos de um equipamento (mais recentes primeiro).
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -37,7 +38,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Escreva um comentário" }, { status: 400 });
     }
 
-    const equipment = await prisma.equipment.findUnique({ where: { id: params?.id }, select: { id: true } });
+    const equipment = await prisma.equipment.findUnique({
+      where: { id: params?.id },
+      select: { id: true, leaseStatus: true },
+    });
     if (!equipment) return NextResponse.json({ error: "Equipamento não encontrado" }, { status: 404 });
 
     const comment = await prisma.equipmentComment.create({
@@ -48,6 +52,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
       include: { author: { select: { name: true } } },
     });
+
+    // O painel externo usa o último comentário como descrição da manutenção.
+    if (equipment.leaseStatus === "MANUTENCAO") {
+      await syncPainelEquipamentos();
+    }
+
     return NextResponse.json({ comment });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? "Erro ao salvar comentário" }, { status: 500 });

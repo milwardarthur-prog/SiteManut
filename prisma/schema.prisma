@@ -53,6 +53,11 @@ enum ReadingSource {
   CSV
 }
 
+enum MaintenanceSeverity {
+  LEVE
+  PESADA
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -127,6 +132,9 @@ model Equipment {
   lastMaintenanceHorimeter Float?
   lastMaintenanceDate      DateTime?
   maintenanceIntervalHours Float?
+  // Detalhes de quando leaseStatus = MANUTENCAO (usados no painel externo)
+  maintenanceSeverity      MaintenanceSeverity?
+  maintenanceExpectedDate  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

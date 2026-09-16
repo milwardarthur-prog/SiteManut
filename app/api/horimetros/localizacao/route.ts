@@ -5,6 +5,7 @@ import Papa from "papaparse";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { normalizeCode } from "@/lib/horimetro";
+import { syncPainelEquipamentos } from "@/lib/painel-sync";
 
 // Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
 // Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
@@ -266,6 +267,8 @@ export async function POST(req: NextRequest) {
           createdById: auth.user.userId,
         },
       });
+
+      await syncPainelEquipamentos();
 
       return NextResponse.json({ ok: true, preview });
     }

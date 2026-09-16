@@ -10,6 +10,7 @@ import {
   classifyPending,
   type ReadingFrequency,
 } from "@/lib/horimetro";
+import { syncPainelEquipamentos } from "@/lib/painel-sync";
 
 const VALID_FREQ = ["SEMANAL", "QUINZENAL", "MENSAL"];
 
@@ -114,6 +115,38 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       data.location = status === "LOCADO" ? client : "";
       data.locationSource = "MANUAL";
       data.lastLocationUpdate = new Date();
+
+      if (status === "MANUTENCAO") {
+        const severity = String(body.maintenanceSeverity ?? "LEVE");
+        if (!["LEVE", "PESADA"].includes(severity)) {
+          return NextResponse.json({ error: "Severidade inválida" }, { status: 400 });
+        }
+        data.maintenanceSeverity = severity;
+        data.maintenanceExpectedDate =
+          body.maintenanceExpectedDate === "" || body.maintenanceExpectedDate == null
+            ? null
+            : new Date(body.maintenanceExpectedDate);
+      } else {
+        // Só fazem sentido enquanto o equipamento está em manutenção.
+        data.maintenanceSeverity = null;
+        data.maintenanceExpectedDate = null;
+      }
+    }
+
+    // Edição de severidade/previsão de retorno sem trocar o status (equipamento
+    // já em manutenção, ajustado via detalhe do equipamento).
+    if (body?.manualStatus === undefined && eq.leaseStatus === "MANUTENCAO") {
+      if (body?.maintenanceSeverity !== undefined) {
+        const severity = String(body.maintenanceSeverity);
+        if (!["LEVE", "PESADA"].includes(severity)) {
+          return NextResponse.json({ error: "Severidade inválida" }, { status: 400 });
+        }
+        data.maintenanceSeverity = severity;
+      }
+      if (body?.maintenanceExpectedDate !== undefined) {
+        const v = body.maintenanceExpectedDate;
+        data.maintenanceExpectedDate = v === "" || v == null ? null : new Date(v);
+      }
     }
 
     // Parâmetros de manutenção
@@ -140,6 +173,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       where: { id: eq.id },
       data,
     });
+
+    if (body?.manualStatus !== undefined || data.maintenanceSeverity !== undefined || data.maintenanceExpectedDate !== undefined) {
+      await syncPainelEquipamentos();
+    }
+
     return NextResponse.json({ ok: true, equipment: updated });
   } catch (e: any) {
     console.error("[horimetros/[id] PUT]", e);

@@ -83,6 +83,8 @@ type Row = {
   lastMaintenanceHorimeter: number | null;
   lastMaintenanceDate: string | null;
   maintenanceIntervalHours: number | null;
+  maintenanceSeverity: "LEVE" | "PESADA" | null;
+  maintenanceExpectedDate: string | null;
   pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   consumption: Consumption;
@@ -552,6 +554,15 @@ function DetailDialog({
             <DetailField label="Confiança" value={<ConfBadge c={row.consumption.confidence} />} />
             <DetailField label="Última manutenção (data)" value={fmtDate(row.lastMaintenanceDate)} />
             <DetailField label="Última manutenção (horímetro)" value={fmtNum(row.lastMaintenanceHorimeter)} />
+            {row.leaseStatus === "MANUTENCAO" && (
+              <>
+                <DetailField
+                  label="Severidade"
+                  value={row.maintenanceSeverity ? SEVERITY_LABELS[row.maintenanceSeverity] : "—"}
+                />
+                <DetailField label="Previsão de retorno" value={fmtDate(row.maintenanceExpectedDate)} />
+              </>
+            )}
             <DetailField label="Próx. revisão (horímetro)" value={fmtNum(row.prediction.nextMaintenanceHorimeter)} />
             <DetailField label="Horas restantes p/ revisão" value={fmtNum(row.prediction.hoursRemaining)} />
             <DetailField
@@ -1032,6 +1043,8 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
   const [lastMaint, setLastMaint] = useState(row.lastMaintenanceHorimeter?.toString() ?? "");
   const [lastMaintDate, setLastMaintDate] = useState(row.lastMaintenanceDate ? row.lastMaintenanceDate.slice(0, 10) : "");
   const [interval, setInterval] = useState(row.maintenanceIntervalHours?.toString() ?? "");
+  const [severity, setSeverity] = useState<"LEVE" | "PESADA">(row.maintenanceSeverity ?? "LEVE");
+  const [expectedDate, setExpectedDate] = useState(row.maintenanceExpectedDate ? row.maintenanceExpectedDate.slice(0, 10) : "");
   const [saving, setSaving] = useState(false);
 
   const freqChanged = freq !== row.readingFrequency;
@@ -1050,6 +1063,10 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
         lastMaintenanceDate: lastMaintDate,
         maintenanceIntervalHours: interval,
       };
+      if (row.leaseStatus === "MANUTENCAO") {
+        body.maintenanceSeverity = severity;
+        body.maintenanceExpectedDate = expectedDate;
+      }
       const res = await fetch(`/api/horimetros/${row.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1114,6 +1131,25 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
             A próxima revisão = últ. manutenção + intervalo. A previsão de data usa a média de consumo recente.
             Manutenções com mais de 1 ano ou com menos de 50h restantes entram automaticamente em "Agendar Manutenção".
           </p>
+          {row.leaseStatus === "MANUTENCAO" && (
+            <div className="border-t pt-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Severidade da manutenção</label>
+                <select
+                  className="w-full border rounded-md h-9 px-2 text-sm"
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value as "LEVE" | "PESADA")}
+                >
+                  <option value="LEVE">Leve</option>
+                  <option value="PESADA">Pesada</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Previsão de retorno</label>
+                <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -1282,10 +1318,87 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
   );
 }
 
+const SEVERITY_LABELS: Record<"LEVE" | "PESADA", string> = { LEVE: "Leve", PESADA: "Pesada" };
+
+function fmtPrazoCurto(d: string | null): string {
+  if (!d) return "—";
+  const dt = new Date(d);
+  return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// ═══ DIÁLOGO: MARCAR EM MANUTENÇÃO (severidade + previsão de retorno) ═════════
+function MarkMaintenanceDialog({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+  const [severity, setSeverity] = useState<"LEVE" | "PESADA">("LEVE");
+  const [expectedDate, setExpectedDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/horimetros/${row.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manualStatus: "MANUTENCAO",
+          maintenanceSeverity: severity,
+          maintenanceExpectedDate: expectedDate,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao salvar.");
+        return;
+      }
+      toast.success(`${row.equipmentNumber} marcado em manutenção.`);
+      onSaved();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-red-600" /> Marcar {row.equipmentNumber} em manutenção
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Severidade</label>
+            <select
+              className="w-full border rounded-md h-9 px-2 text-sm"
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value as "LEVE" | "PESADA")}
+            >
+              <option value="LEVE">Leve</option>
+              <option value="PESADA">Pesada</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Previsão de retorno (opcional)</label>
+            <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button className="bg-red-600 hover:bg-red-700" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Marcar em manutenção"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ═══ PAINEL: EQUIPAMENTOS EM MANUTENÇÃO ═══════════════════════════════════════
 function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
   const [search, setSearch] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [marking, setMarking] = useState<Row | null>(null);
 
   const emManutencao = useMemo(() => rows.filter((r) => r.leaseStatus === "MANUTENCAO"), [rows]);
 
@@ -1296,22 +1409,20 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
     return base.filter((r) => r.equipmentNumber.toLowerCase().includes(t));
   }, [rows, search]);
 
-  const setStatus = async (row: Row, status: "MANUTENCAO" | "DISPONIVEL") => {
+  const voltarAoServico = async (row: Row) => {
     setSavingId(row.id);
     try {
       const res = await fetch(`/api/horimetros/${row.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manualStatus: status }),
+        body: JSON.stringify({ manualStatus: "DISPONIVEL" }),
       });
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.error || "Erro ao salvar.");
         return;
       }
-      toast.success(
-        status === "MANUTENCAO" ? `${row.equipmentNumber} marcado em manutenção.` : `${row.equipmentNumber} devolvido ao serviço.`
-      );
+      toast.success(`${row.equipmentNumber} devolvido ao serviço.`);
       onDone();
     } catch {
       toast.error("Falha de conexão.");
@@ -1330,6 +1441,8 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <Th>Equipamento</Th>
+                  <Th>Severidade</Th>
+                  <Th>Previsão de retorno</Th>
                   <Th>Desde</Th>
                   <Th></Th>
                 </tr>
@@ -1338,6 +1451,18 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
                 {emManutencao.map((r) => (
                   <tr key={r.id}>
                     <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
+                    <Td>
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          r.maintenanceSeverity === "PESADA"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {r.maintenanceSeverity ? SEVERITY_LABELS[r.maintenanceSeverity] : "—"}
+                      </span>
+                    </Td>
+                    <Td className="whitespace-nowrap">{fmtPrazoCurto(r.maintenanceExpectedDate)}</Td>
                     <Td className="whitespace-nowrap">{fmtDate(r.lastLocationUpdate)}</Td>
                     <Td>
                       <Button
@@ -1345,7 +1470,7 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
                         variant="ghost"
                         className="gap-1 text-gray-500 hover:text-green-600"
                         disabled={savingId === r.id}
-                        onClick={() => setStatus(r, "DISPONIVEL")}
+                        onClick={() => voltarAoServico(r)}
                       >
                         {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                         Devolver ao serviço
@@ -1383,9 +1508,9 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
                       size="sm"
                       className="bg-red-600 hover:bg-red-700 gap-1"
                       disabled={savingId === r.id}
-                      onClick={() => setStatus(r, "MANUTENCAO")}
+                      onClick={() => setMarking(r)}
                     >
-                      {savingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Marcar em manutenção"}
+                      Marcar em manutenção
                     </Button>
                   </Td>
                 </tr>
@@ -1397,6 +1522,14 @@ function ManutencaoPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) 
           </table>
         </div>
       </div>
+
+      {marking && (
+        <MarkMaintenanceDialog
+          row={marking}
+          onClose={() => setMarking(null)}
+          onSaved={() => { setMarking(null); onDone(); }}
+        />
+      )}
     </div>
   );
 }
