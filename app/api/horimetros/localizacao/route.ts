@@ -118,16 +118,17 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .filter(([code]) => baseSet.has(code))
     .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
 
-  // Equipamentos locados sem contrato ativo ou em manutenção (marcados
-  // manualmente) não aparecem no relatório — preserva o status em vez de
-  // marcar como disponível.
+  // Equipamentos locados sem contrato ativo (marcados manualmente) ou em
+  // manutenção não aparecem no relatório — preserva o status em vez de
+  // marcar como disponível. "Em manutenção" é sempre preservado, porque um
+  // relatório de locação nunca tem como representar esse estado — só uma
+  // ação manual (ex.: "Devolver ao serviço") deveria poder tirar o
+  // equipamento dele.
   const manualPreserved = allEquip.filter((e) => {
     const code = normalizeCode(e.equipmentNumber);
-    return (
-      e.locationSource === "MANUAL" &&
-      (e.leaseStatus === "LOCADO" || e.leaseStatus === "MANUTENCAO") &&
-      !leaseMap.has(code)
-    );
+    if (leaseMap.has(code)) return false;
+    if (e.leaseStatus === "MANUTENCAO") return true;
+    return e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO";
   }).length;
 
   return {
@@ -226,8 +227,14 @@ export async function POST(req: NextRequest) {
             }),
           ];
         }
-        if (e.locationSource === "MANUAL" && (e.leaseStatus === "LOCADO" || e.leaseStatus === "MANUTENCAO")) {
-          return []; // preserva a locação/manutenção manual
+        // "Em manutenção" é sempre preservado (um relatório de locação não
+        // tem como representar esse estado). Locação manual (sem contrato
+        // ativo) só é preservada quando foi de fato marcada manualmente.
+        if (e.leaseStatus === "MANUTENCAO") {
+          return [];
+        }
+        if (e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO") {
+          return []; // preserva a locação manual
         }
         return [
           prisma.equipment.update({
