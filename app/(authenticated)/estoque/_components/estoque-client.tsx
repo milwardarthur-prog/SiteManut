@@ -21,6 +21,7 @@ type ImportHistory = {
 type Preview = {
   nameColumn: string;
   priceColumn: string;
+  fallbackPriceColumn?: string;
   toCreate: { name: string; price: number }[];
   toUpdate: { name: string; price: number; previousPrice: number }[];
   unchanged: number;
@@ -182,6 +183,9 @@ export default function EstoqueClient() {
             <h3 className="font-semibold text-gray-800">Prévia da importação</h3>
             <p className="text-xs text-gray-500">
               Coluna de nome: <strong>{preview.nameColumn}</strong> · Coluna de preço: <strong>{preview.priceColumn}</strong>
+              {preview.fallbackPriceColumn && (
+                <> (usa <strong>{preview.fallbackPriceColumn}</strong> quando a principal está vazia/zerada)</>
+              )}
               {" "}— confira se bateram com o esperado antes de confirmar.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

@@ -27,7 +27,7 @@ function parsePrice(raw: string | null | undefined): number | null {
 // Relatórios de patrimônio/estoque costumam ter várias colunas de "código"
 // (ex.: "Cod Produto") que não são o nome do item, e às vezes duas colunas de
 // preço (compra/venda) — por isso a prioridade abaixo evita falsos positivos.
-function pickColumns(fields: string[]): { nameCol?: string; priceCol?: string } {
+function pickColumns(fields: string[]): { nameCol?: string; priceCol?: string; fallbackPriceCol?: string } {
   const norm = (s: string) => normalizeName(s).toLowerCase();
 
   const nameCandidates = fields.filter((f) => !norm(f).includes("cod"));
@@ -46,14 +46,18 @@ function pickColumns(fields: string[]): { nameCol?: string; priceCol?: string } 
     priceCandidates.find((f) => norm(f).includes("compra")) ??
     priceCandidates.find((f) => !norm(f).includes("venda")) ??
     priceCandidates[0];
+  // Quando há mais de uma coluna de preço (ex.: compra e venda), a outra serve
+  // de alternativa para linhas em que a coluna principal está vazia ou zerada.
+  const fallbackPriceCol = priceCandidates.find((f) => f !== priceCol);
 
-  return { nameCol, priceCol };
+  return { nameCol, priceCol, fallbackPriceCol };
 }
 
 type PreviewRow = { name: string; price: number };
 type PreviewResult = {
   nameColumn: string;
   priceColumn: string;
+  fallbackPriceColumn?: string;
   toCreate: PreviewRow[];
   toUpdate: (PreviewRow & { previousPrice: number })[];
   unchanged: number;
@@ -69,7 +73,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     transformHeader: (h) => h.trim(),
   });
   const fields = parsed.meta?.fields ?? [];
-  const { nameCol, priceCol } = pickColumns(fields);
+  const { nameCol, priceCol, fallbackPriceCol } = pickColumns(fields);
   if (!nameCol || !priceCol) {
     return {
       error:
@@ -90,30 +94,41 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
       errorRows.push({ line, message: "Nome do item vazio" });
       return;
     }
-    const rawPrice = normalizeName(row[priceCol]);
-    if (!rawPrice) {
-      // Item sem preço cadastrado no arquivo — não é um erro de dado, só não
-      // há o que importar para essa linha; segue sem bloquear a importação.
-      skippedNoPrice++;
+    const rawPrimary = normalizeName(row[priceCol]);
+    const primary = rawPrimary ? parsePrice(rawPrimary) : null;
+    if (rawPrimary && primary == null) {
+      errorRows.push({ line, message: `Preço inválido para "${name}": "${rawPrimary}"` });
       return;
     }
-    const price = parsePrice(rawPrice);
+    // Quando a coluna principal está vazia ou zerada (ex.: "Preço Compra" sem
+    // valor), usa a outra coluna de preço (ex.: "Preço Venda") como alternativa.
+    const rawFallback = fallbackPriceCol ? normalizeName(row[fallbackPriceCol]) : "";
+    const fallback = rawFallback ? parsePrice(rawFallback) : null;
+
+    const price = primary != null && primary > 0 ? primary : fallback != null && fallback > 0 ? fallback : null;
+
     if (price == null) {
-      errorRows.push({ line, message: `Preço inválido para "${name}": "${rawPrice}"` });
+      // Nenhuma das colunas de preço tem um valor utilizável para esse item —
+      // não é um erro de dado, só não há o que importar para essa linha.
+      skippedNoPrice++;
       return;
     }
     const key = name.toLowerCase();
     seen.set(key, (seen.get(key) ?? 0) + 1);
-    byName.set(key, price);
+    // Nomes duplicados no arquivo (comum em relatórios de patrimônio, onde
+    // SKUs diferentes podem ter a mesma descrição) ficam com o maior preço
+    // válido encontrado, em vez do valor da última ocorrência — assim uma
+    // linha zerada/duplicada não apaga um preço real já visto.
+    const best = byName.get(key);
+    if (best == null || price > best) {
+      byName.set(key, price);
+    }
   });
 
   const duplicates = Array.from(seen.entries())
     .filter(([, c]) => c > 1)
     .map(([key]) => key);
 
-  // Nomes duplicados no arquivo (comum em relatórios de patrimônio, onde SKUs
-  // diferentes podem ter a mesma descrição) usam o preço da última ocorrência
-  // — não bloqueia a importação dos demais itens.
   const validEntries = Array.from(byName.entries());
   const nameByKey = new Map<string, string>();
   rows.forEach((row) => {
@@ -142,7 +157,17 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     }
   }
 
-  return { nameColumn: nameCol, priceColumn: priceCol, toCreate, toUpdate, unchanged, duplicates, errorRows, skippedNoPrice };
+  return {
+    nameColumn: nameCol,
+    priceColumn: priceCol,
+    fallbackPriceColumn: fallbackPriceCol,
+    toCreate,
+    toUpdate,
+    unchanged,
+    duplicates,
+    errorRows,
+    skippedNoPrice,
+  };
 }
 
 // GET — histórico de importações
