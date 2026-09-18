@@ -840,6 +840,16 @@ function PartsSection({ orderId, parts, canEdit, onSaved }: { orderId: string; p
   const [desc, setDesc] = useState("");
   const [qty, setQty] = useState("1");
   const [adding, setAdding] = useState(false);
+  const [stockItems, setStockItems] = useState<{ id: string; name: string; price: number }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/estoque/lookup")
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setStockItems(d.items ?? []))
+      .catch(() => {});
+  }, []);
+
+  const selectedStockItem = stockItems.find((i) => i.name === desc);
 
   const addPart = async () => {
     if (!desc.trim()) { toast.error("Descrição é obrigatória"); return; }
@@ -886,12 +896,30 @@ function PartsSection({ orderId, parts, canEdit, onSaved }: { orderId: string; p
           </div>
         )}
         {canEdit && (
-          <div className="flex gap-2">
-            <Input placeholder="Descrição da peça" value={desc} onChange={(e: any) => setDesc(e?.target?.value ?? "")} className="flex-1" />
-            <Input type="number" min="1" value={qty} onChange={(e: any) => setQty(e?.target?.value ?? "1")} className="w-20" />
-            <Button onClick={addPart} disabled={adding} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
-              <Plus className="w-4 h-4" />
-            </Button>
+          <div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Descrição da peça"
+                value={desc}
+                onChange={(e: any) => setDesc(e?.target?.value ?? "")}
+                list="stock-items-datalist"
+                className="flex-1"
+              />
+              <datalist id="stock-items-datalist">
+                {stockItems.map((i) => (
+                  <option key={i.id} value={i.name} />
+                ))}
+              </datalist>
+              <Input type="number" min="1" value={qty} onChange={(e: any) => setQty(e?.target?.value ?? "1")} className="w-20" />
+              <Button onClick={addPart} disabled={adding} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {selectedStockItem && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Preço no estoque: {selectedStockItem.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </p>
+            )}
           </div>
         )}
       </CardContent>

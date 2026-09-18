@@ -18,13 +18,11 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Package,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-
-// Apenas o Arthur tem acesso liberado a todos os módulos; os demais gestores
-// veem só Horímetros no menu (as rotas continuam acessíveis por URL direta).
-const FULL_ACCESS_EMAIL = "milwardarthur@gmail.com";
+import { FULL_ACCESS_EMAIL } from "@/lib/access";
 
 const restrictedAdminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
 
@@ -33,6 +31,7 @@ const fullAdminLinks = [
   { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
   { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
   { href: "/horimetros", label: "Horímetros", icon: Gauge },
+  { href: "/estoque", label: "Estoque", icon: Package },
   { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
   { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },

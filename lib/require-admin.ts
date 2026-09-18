@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { FULL_ACCESS_EMAIL } from "@/lib/access";
 
 export type AdminSession = { userId: string; name: string; email: string };
 
@@ -17,6 +18,23 @@ export async function requireAdmin(): Promise<
   const u = session.user as any;
   if (u?.role !== "ADMIN") {
     return { ok: false, status: 403, error: "Acesso restrito ao gestor (ADMIN)" };
+  }
+  return { ok: true, user: { userId: u.id, name: u.name, email: u.email } };
+}
+
+/**
+ * Garante que o usuário autenticado é o único com acesso liberado a todos os
+ * módulos (hoje, só o Arthur) — usado nas rotas de Estoque.
+ */
+export async function requireFullAccess(): Promise<
+  | { ok: true; user: AdminSession }
+  | { ok: false; status: number; error: string }
+> {
+  const session = await getServerSession(authOptions);
+  if (!session) return { ok: false, status: 401, error: "Não autorizado" };
+  const u = session.user as any;
+  if (u?.role !== "ADMIN" || u?.email !== FULL_ACCESS_EMAIL) {
+    return { ok: false, status: 403, error: "Acesso restrito" };
   }
   return { ok: true, user: { userId: u.id, name: u.name, email: u.email } };
 }

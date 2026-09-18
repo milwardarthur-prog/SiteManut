@@ -58,6 +58,29 @@ enum MaintenanceSeverity {
   PESADA
 }
 
+model StockItem {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model StockImport {
+  id           String   @id @default(cuid())
+  fileName     String
+  createdCount Int      @default(0)
+  updatedCount Int      @default(0)
+  errorCount   Int      @default(0)
+  createdById  String
+  createdBy    User     @relation("StockImportAuthor", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -76,6 +99,7 @@ model User {
   frequencyChanges  FrequencyChangeLog[] @relation("FreqChangeAuthor")
   locationImports   LocationImport[]     @relation("ImportAuthor")
   equipmentComments EquipmentComment[]   @relation("EquipmentCommentAuthor")
+  stockImports      StockImport[]        @relation("StockImportAuthor")
 }
 
 model Equipment {
