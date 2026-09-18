@@ -19,11 +19,14 @@ type ImportHistory = {
   createdBy: { name: string } | null;
 };
 type Preview = {
+  nameColumn: string;
+  priceColumn: string;
   toCreate: { name: string; price: number }[];
   toUpdate: { name: string; price: number; previousPrice: number }[];
   unchanged: number;
   duplicates: string[];
   errorRows: { line: number; message: string }[];
+  skippedNoPrice: number;
 };
 
 const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -177,12 +180,23 @@ export default function EstoqueClient() {
         <Card>
           <CardContent className="p-4 space-y-3">
             <h3 className="font-semibold text-gray-800">Prévia da importação</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <p className="text-xs text-gray-500">
+              Coluna de nome: <strong>{preview.nameColumn}</strong> · Coluna de preço: <strong>{preview.priceColumn}</strong>
+              {" "}— confira se bateram com o esperado antes de confirmar.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <MiniStat label="Itens novos" value={preview.toCreate.length} color="text-green-600" />
               <MiniStat label="Preços atualizados" value={preview.toUpdate.length} color="text-blue-600" />
               <MiniStat label="Sem alteração" value={preview.unchanged} />
+              <MiniStat label="Sem preço (ignorados)" value={preview.skippedNoPrice ?? 0} color="text-amber-600" />
               <MiniStat label="Linhas com erro" value={preview.errorRows?.length ?? 0} color="text-red-600" />
             </div>
+
+            {preview.duplicates.length > 0 && (
+              <p className="text-xs text-amber-600">
+                Nomes duplicados no arquivo (usado o preço da última ocorrência): {preview.duplicates.join(", ")}
+              </p>
+            )}
 
             {blocking.length > 0 && (
               <div className="rounded border border-red-200 bg-red-50 p-3 text-sm space-y-1">

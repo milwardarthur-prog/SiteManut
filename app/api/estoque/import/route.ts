@@ -24,29 +24,42 @@ function parsePrice(raw: string | null | undefined): number | null {
 }
 
 // Identifica as colunas de nome/preço de forma tolerante a variações de cabeçalho.
+// Relatórios de patrimônio/estoque costumam ter várias colunas de "código"
+// (ex.: "Cod Produto") que não são o nome do item, e às vezes duas colunas de
+// preço (compra/venda) — por isso a prioridade abaixo evita falsos positivos.
 function pickColumns(fields: string[]): { nameCol?: string; priceCol?: string } {
   const norm = (s: string) => normalizeName(s).toLowerCase();
-  let nameCol: string | undefined;
-  let priceCol: string | undefined;
-  for (const f of fields) {
+
+  const nameCandidates = fields.filter((f) => !norm(f).includes("cod"));
+  const nameCol =
+    nameCandidates.find((f) => norm(f).includes("descri")) ??
+    nameCandidates.find((f) => norm(f).includes("nome")) ??
+    nameCandidates.find((f) => norm(f).includes("item")) ??
+    nameCandidates.find((f) => norm(f).includes("produto")) ??
+    fields.find((f) => norm(f).includes("descri") || norm(f).includes("nome") || norm(f).includes("item") || norm(f).includes("produto"));
+
+  const priceCandidates = fields.filter((f) => {
     const n = norm(f);
-    if (!nameCol && (n.includes("nome") || n.includes("item") || n.includes("descri") || n.includes("produto"))) {
-      nameCol = f;
-    }
-    if (!priceCol && (n.includes("preç") || n.includes("prec") || n.includes("valor") || n.includes("price"))) {
-      priceCol = f;
-    }
-  }
+    return n.includes("preç") || n.includes("prec") || n.includes("valor") || n.includes("price");
+  });
+  const priceCol =
+    priceCandidates.find((f) => norm(f).includes("compra")) ??
+    priceCandidates.find((f) => !norm(f).includes("venda")) ??
+    priceCandidates[0];
+
   return { nameCol, priceCol };
 }
 
 type PreviewRow = { name: string; price: number };
 type PreviewResult = {
+  nameColumn: string;
+  priceColumn: string;
   toCreate: PreviewRow[];
   toUpdate: (PreviewRow & { previousPrice: number })[];
   unchanged: number;
   duplicates: string[];
   errorRows: { line: number; message: string }[];
+  skippedNoPrice: number;
 };
 
 async function buildPreview(csv: string): Promise<PreviewResult | { error: string }> {
@@ -68,6 +81,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
   const errorRows: { line: number; message: string }[] = [];
   const seen = new Map<string, number>();
   const byName = new Map<string, number>();
+  let skippedNoPrice = 0;
 
   rows.forEach((row, idx) => {
     const line = idx + 2;
@@ -76,9 +90,16 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
       errorRows.push({ line, message: "Nome do item vazio" });
       return;
     }
-    const price = parsePrice(row[priceCol]);
+    const rawPrice = normalizeName(row[priceCol]);
+    if (!rawPrice) {
+      // Item sem preço cadastrado no arquivo — não é um erro de dado, só não
+      // há o que importar para essa linha; segue sem bloquear a importação.
+      skippedNoPrice++;
+      return;
+    }
+    const price = parsePrice(rawPrice);
     if (price == null) {
-      errorRows.push({ line, message: `Preço inválido para "${name}"` });
+      errorRows.push({ line, message: `Preço inválido para "${name}": "${rawPrice}"` });
       return;
     }
     const key = name.toLowerCase();
@@ -90,7 +111,10 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .filter(([, c]) => c > 1)
     .map(([key]) => key);
 
-  const validEntries = Array.from(byName.entries()).filter(([key]) => !duplicates.includes(key));
+  // Nomes duplicados no arquivo (comum em relatórios de patrimônio, onde SKUs
+  // diferentes podem ter a mesma descrição) usam o preço da última ocorrência
+  // — não bloqueia a importação dos demais itens.
+  const validEntries = Array.from(byName.entries());
   const nameByKey = new Map<string, string>();
   rows.forEach((row) => {
     const name = normalizeName(row[nameCol]);
@@ -118,7 +142,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     }
   }
 
-  return { toCreate, toUpdate, unchanged, duplicates, errorRows };
+  return { nameColumn: nameCol, priceColumn: priceCol, toCreate, toUpdate, unchanged, duplicates, errorRows, skippedNoPrice };
 }
 
 // GET — histórico de importações
@@ -155,9 +179,6 @@ export async function POST(req: NextRequest) {
     }
 
     const blocking: string[] = [];
-    if (preview.duplicates.length > 0) {
-      blocking.push(`Itens duplicados no arquivo: ${preview.duplicates.join(", ")}`);
-    }
     if (preview.errorRows.length > 0) {
       blocking.push(`${preview.errorRows.length} linha(s) com erro`);
     }
