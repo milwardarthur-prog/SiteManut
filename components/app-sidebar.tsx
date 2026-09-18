@@ -3,13 +3,43 @@
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Gauge, LogOut, Settings, Menu, X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  LayoutDashboard,
+  ClipboardList,
+  ClipboardCheck,
+  Zap,
+  Wrench,
+  BarChart3,
+  ScanLine,
+  Gauge,
+  LogOut,
+  Settings,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
-const adminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
+// Apenas o Arthur tem acesso liberado a todos os módulos; os demais gestores
+// veem só Horímetros no menu (as rotas continuam acessíveis por URL direta).
+const FULL_ACCESS_EMAIL = "milwardarthur@gmail.com";
 
-const techLinks: typeof adminLinks = [];
+const restrictedAdminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
+
+const fullAdminLinks = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
+  { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
+  { href: "/horimetros", label: "Horímetros", icon: Gauge },
+  { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
+  { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
+  { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/scanner", label: "Escanear QR", icon: ScanLine },
+];
+
+const techLinks: typeof restrictedAdminLinks = [];
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
@@ -37,7 +67,8 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
 
   const user = session?.user as any;
   const isAdmin = user?.role === "ADMIN";
-  const links = isAdmin ? adminLinks : techLinks;
+  const hasFullAccess = isAdmin && user?.email === FULL_ACCESS_EMAIL;
+  const links = isAdmin ? (hasFullAccess ? fullAdminLinks : restrictedAdminLinks) : techLinks;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -61,7 +92,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
           }`}
         >
           <Link
-            href={isAdmin ? "/horimetros" : "/os"}
+            href={isAdmin ? (hasFullAccess ? "/dashboard" : "/horimetros") : "/os"}
             className="flex items-center gap-3 overflow-hidden"
           >
             <div className="w-9 h-9 shrink-0 bg-orange-500 rounded-lg flex items-center justify-center">
