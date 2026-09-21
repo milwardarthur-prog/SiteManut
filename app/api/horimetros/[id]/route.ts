@@ -126,6 +126,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           body.maintenanceExpectedDate === "" || body.maintenanceExpectedDate == null
             ? null
             : new Date(body.maintenanceExpectedDate);
+        // A manutenção agendada começou: o agendamento deixa de valer.
+        data.maintenanceScheduledDate = null;
       } else {
         // Só fazem sentido enquanto o equipamento está em manutenção.
         data.maintenanceSeverity = null;
@@ -158,6 +160,24 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body?.lastMaintenanceDate !== undefined) {
       const v = body.lastMaintenanceDate;
       data.lastMaintenanceDate = v === "" || v === null ? null : new Date(v);
+      // Registrar uma nova manutenção realizada encerra o agendamento anterior.
+      if (data.lastMaintenanceDate && data.lastMaintenanceDate.getTime() !== eq.lastMaintenanceDate?.getTime()) {
+        data.maintenanceScheduledDate = null;
+      }
+    }
+    // Sinalização de "manutenção já agendada para dd/mm" (vazio remove).
+    if (body?.maintenanceScheduledDate !== undefined) {
+      const v = body.maintenanceScheduledDate;
+      if (v === "" || v === null) {
+        data.maintenanceScheduledDate = null;
+      } else {
+        // Meio-dia UTC: evita que o fuso desloque a data em um dia na exibição.
+        const d = new Date(`${String(v).slice(0, 10)}T12:00:00.000Z`);
+        if (isNaN(d.getTime())) {
+          return NextResponse.json({ error: "Data de agendamento inválida" }, { status: 400 });
+        }
+        data.maintenanceScheduledDate = d;
+      }
     }
     if (body?.maintenanceIntervalHours !== undefined) {
       const v = body.maintenanceIntervalHours;

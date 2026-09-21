@@ -156,6 +156,9 @@ model Equipment {
   lastMaintenanceHorimeter Float?
   lastMaintenanceDate      DateTime?
   maintenanceIntervalHours Float?
+  // Data em que a próxima manutenção preventiva já foi agendada (sinalização
+  // na tela "Agendar Manutenção"; não afeta o status do equipamento)
+  maintenanceScheduledDate DateTime?
   // Detalhes de quando leaseStatus = MANUTENCAO (usados no painel externo)
   maintenanceSeverity      MaintenanceSeverity?
   maintenanceExpectedDate  DateTime?

@@ -19,6 +19,7 @@ import {
   MapPinPlus,
   Wrench,
   History,
+  CalendarCheck,
   X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,7 @@ type Row = {
   maintenanceIntervalHours: number | null;
   maintenanceSeverity: "LEVE" | "PESADA" | null;
   maintenanceExpectedDate: string | null;
+  maintenanceScheduledDate: string | null;
   pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   consumption: Consumption;
@@ -228,6 +230,8 @@ export default function HorimetrosClient() {
   const [locacaoManualOpen, setLocacaoManualOpen] = useState(false);
   const [manutencaoOpen, setManutencaoOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
+  const [scheduling, setScheduling] = useState<Row | null>(null);
+  const showSchedule = fSituacao === "agendar_manutencao";
   const [selected, setSelected] = useState<Row | null>(null);
 
   const load = async () => {
@@ -406,6 +410,7 @@ export default function HorimetrosClient() {
               <Th className="text-right">Horímetro atual</Th>
               <Th className="text-right">Horas p/ manutenção</Th>
               <Th>Motivo</Th>
+              {showSchedule && <Th>Agendamento</Th>}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -427,10 +432,31 @@ export default function HorimetrosClient() {
                 <Td>
                   <ScheduleReasonBadge reason={r.scheduleReason} />
                 </Td>
+                {showSchedule && (
+                  <Td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setScheduling(r)}
+                      className={
+                        r.maintenanceScheduledDate
+                          ? "text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-green-100 text-green-800 hover:bg-green-200 inline-flex items-center gap-1"
+                          : "text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50"
+                      }
+                    >
+                      {r.maintenanceScheduledDate ? (
+                        <>
+                          <CalendarCheck className="w-3 h-3" /> Manutenção Agendada {fmtScheduledShort(r.maintenanceScheduledDate)}
+                        </>
+                      ) : (
+                        "Marcar como agendada"
+                      )}
+                    </button>
+                  </Td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={showSchedule ? 7 : 6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
@@ -512,6 +538,14 @@ export default function HorimetrosClient() {
         />
       )}
 
+      {scheduling && (
+        <ScheduleDialog
+          row={rows.find((r) => r.id === scheduling.id) ?? scheduling}
+          onClose={() => setScheduling(null)}
+          onSaved={() => { setScheduling(null); load(); }}
+        />
+      )}
+
       {editing && (
         <AjustarDialog row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
@@ -563,6 +597,9 @@ function DetailDialog({
                 />
                 <DetailField label="Previsão de retorno" value={fmtDate(row.maintenanceExpectedDate)} />
               </>
+            )}
+            {row.maintenanceScheduledDate && (
+              <DetailField label="Manutenção agendada" value={fmtScheduledShort(row.maintenanceScheduledDate, true)} />
             )}
             <DetailField label="Próx. revisão (horímetro)" value={fmtNum(row.prediction.nextMaintenanceHorimeter)} />
             <DetailField label="Horas restantes p/ revisão" value={fmtNum(row.prediction.hoursRemaining)} />
@@ -1303,6 +1340,74 @@ function fmtPrazoCurto(d: string | null): string {
   if (!d) return "—";
   const dt = new Date(d);
   return `${String(dt.getDate()).padStart(2, "0")}/${String(dt.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// A data de agendamento é gravada ao meio-dia UTC, então é lida em UTC para
+// não voltar um dia por causa do fuso.
+function fmtScheduledShort(d: string, withYear = false): string {
+  const dt = new Date(d);
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  return withYear ? `${dd}/${mm}/${dt.getUTCFullYear()}` : `${dd}/${mm}`;
+}
+
+// ═══ DIÁLOGO: SINALIZAR MANUTENÇÃO AGENDADA ═══════════════════════════════════
+function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+  const [date, setDate] = useState(row.maintenanceScheduledDate ? row.maintenanceScheduledDate.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (value: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/horimetros/${row.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maintenanceScheduledDate: value }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao salvar.");
+        return;
+      }
+      toast.success(value ? `Manutenção de ${row.equipmentNumber} marcada como agendada.` : "Agendamento removido.");
+      onSaved();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarCheck className="w-5 h-5 text-green-600" /> Manutenção agendada — {row.equipmentNumber}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="text-sm">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Data agendada</label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <DialogFooter className="sm:justify-between">
+          {row.maintenanceScheduledDate ? (
+            <Button variant="outline" className="text-red-700 border-red-200 hover:bg-red-50" onClick={() => save("")} disabled={saving}>
+              Remover agendamento
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={() => save(date)} disabled={saving || !date}>
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ═══ DIÁLOGO: MARCAR EM MANUTENÇÃO (severidade + previsão de retorno) ═════════
