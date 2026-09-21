@@ -88,6 +88,7 @@ type Row = {
   maintenanceSeverity: "LEVE" | "PESADA" | null;
   maintenanceExpectedDate: string | null;
   maintenanceScheduledDate: string | null;
+  maintenanceScheduledNote: string | null;
   pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   consumption: Consumption;
@@ -411,6 +412,7 @@ export default function HorimetrosClient() {
               <Th className="text-right">Horas p/ manutenção</Th>
               <Th>Motivo</Th>
               {showSchedule && <Th>Agendamento</Th>}
+              {showSchedule && <Th>Comentário</Th>}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -453,10 +455,19 @@ export default function HorimetrosClient() {
                     </button>
                   </Td>
                 )}
+                {showSchedule && (
+                  <Td className="max-w-[260px] text-gray-600 text-xs" onClick={(e) => e.stopPropagation()}>
+                    {r.maintenanceScheduledNote ? (
+                      <span className="line-clamp-2" title={r.maintenanceScheduledNote}>{r.maintenanceScheduledNote}</span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </Td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={showSchedule ? 7 : 6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={showSchedule ? 8 : 6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
@@ -599,7 +610,10 @@ function DetailDialog({
               </>
             )}
             {row.maintenanceScheduledDate && (
-              <DetailField label="Manutenção agendada" value={fmtScheduledShort(row.maintenanceScheduledDate, true)} />
+              <DetailField
+                label="Manutenção agendada"
+                value={<>{fmtScheduledShort(row.maintenanceScheduledDate, true)}{row.maintenanceScheduledNote && <span className="block text-xs text-gray-500 font-normal">{row.maintenanceScheduledNote}</span>}</>}
+              />
             )}
             <DetailField label="Próx. revisão (horímetro)" value={fmtNum(row.prediction.nextMaintenanceHorimeter)} />
             <DetailField label="Horas restantes p/ revisão" value={fmtNum(row.prediction.hoursRemaining)} />
@@ -1354,6 +1368,7 @@ function fmtScheduledShort(d: string, withYear = false): string {
 // ═══ DIÁLOGO: SINALIZAR MANUTENÇÃO AGENDADA ═══════════════════════════════════
 function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
   const [date, setDate] = useState(row.maintenanceScheduledDate ? row.maintenanceScheduledDate.slice(0, 10) : "");
+  const [note, setNote] = useState(row.maintenanceScheduledNote ?? "");
   const [saving, setSaving] = useState(false);
 
   const save = async (value: string) => {
@@ -1362,7 +1377,7 @@ function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
       const res = await fetch(`/api/horimetros/${row.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ maintenanceScheduledDate: value }),
+        body: JSON.stringify({ maintenanceScheduledDate: value, maintenanceScheduledNote: note }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1380,15 +1395,23 @@ function ScheduleDialog({ row, onClose, onSaved }: { row: Row; onClose: () => vo
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarCheck className="w-5 h-5 text-green-600" /> Manutenção agendada — {row.equipmentNumber}
+            <CalendarCheck className="w-5 h-5 text-green-600" /> Agendamento — {row.equipmentNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="text-sm">
           <label className="block text-xs font-medium text-gray-600 mb-1">Data agendada</label>
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <label className="block text-xs font-medium text-gray-600 mt-3 mb-1">Comentário (opcional)</label>
+          <textarea
+            className="w-full border rounded-md px-3 py-2 text-sm min-h-[80px] resize-y"
+            placeholder="Ex.: oficina, tipo de revisão, peças já separadas..."
+            maxLength={500}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
         </div>
         <DialogFooter className="sm:justify-between">
           {row.maintenanceScheduledDate ? (

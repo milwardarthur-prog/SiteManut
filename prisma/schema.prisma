@@ -159,6 +159,7 @@ model Equipment {
   // Data em que a próxima manutenção preventiva já foi agendada (sinalização
   // na tela "Agendar Manutenção"; não afeta o status do equipamento)
   maintenanceScheduledDate DateTime?
+  maintenanceScheduledNote String?
   // Detalhes de quando leaseStatus = MANUTENCAO (usados no painel externo)
   maintenanceSeverity      MaintenanceSeverity?
   maintenanceExpectedDate  DateTime?

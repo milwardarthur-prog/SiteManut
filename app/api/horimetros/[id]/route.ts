@@ -128,6 +128,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             : new Date(body.maintenanceExpectedDate);
         // A manutenção agendada começou: o agendamento deixa de valer.
         data.maintenanceScheduledDate = null;
+        data.maintenanceScheduledNote = null;
       } else {
         // Só fazem sentido enquanto o equipamento está em manutenção.
         data.maintenanceSeverity = null;
@@ -163,6 +164,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       // Registrar uma nova manutenção realizada encerra o agendamento anterior.
       if (data.lastMaintenanceDate && data.lastMaintenanceDate.getTime() !== eq.lastMaintenanceDate?.getTime()) {
         data.maintenanceScheduledDate = null;
+        data.maintenanceScheduledNote = null;
       }
     }
     // Sinalização de "manutenção já agendada para dd/mm" (vazio remove).
@@ -170,6 +172,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const v = body.maintenanceScheduledDate;
       if (v === "" || v === null) {
         data.maintenanceScheduledDate = null;
+        data.maintenanceScheduledNote = null;
       } else {
         // Meio-dia UTC: evita que o fuso desloque a data em um dia na exibição.
         const d = new Date(`${String(v).slice(0, 10)}T12:00:00.000Z`);
@@ -178,6 +181,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         }
         data.maintenanceScheduledDate = d;
       }
+    }
+    // Observação sobre a manutenção agendada (só faz sentido com agendamento ativo).
+    if (body?.maintenanceScheduledNote !== undefined && data.maintenanceScheduledDate !== null) {
+      const n = typeof body.maintenanceScheduledNote === "string" ? body.maintenanceScheduledNote.trim() : "";
+      data.maintenanceScheduledNote = n ? n.slice(0, 500) : null;
     }
     if (body?.maintenanceIntervalHours !== undefined) {
       const v = body.maintenanceIntervalHours;

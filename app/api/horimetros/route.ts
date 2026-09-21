@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         lastMaintenanceDate: true,
         maintenanceIntervalHours: true,
         maintenanceScheduledDate: true,
+        maintenanceScheduledNote: true,
         maintenanceSeverity: true,
         maintenanceExpectedDate: true,
         horimeterReadings: {
