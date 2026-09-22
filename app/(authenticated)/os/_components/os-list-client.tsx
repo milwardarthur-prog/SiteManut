@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import OSTechBoard from "./os-tech-board";
 
 const statusLabels: Record<string, string> = {
   PENDENTE_APROVACAO: "Pendente Aprovação",
@@ -79,7 +80,9 @@ export default function OSListClient() {
   const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   useEffect(() => {
-    // Carrega listas de filtro uma vez
+    // Lista tabulada + filtros é só pra visão do gestor — o técnico usa o
+    // quadro (OSTechBoard), que busca os próprios dados.
+    if (!isAdmin) return;
     (async () => {
       try {
         const [tRes, eRes] = await Promise.all([
@@ -90,15 +93,17 @@ export default function OSListClient() {
         if (eRes.ok) setEquipments(await eRes.json());
       } catch { /* ignore */ }
     })();
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     fetchOrders();
-  }, [activeTab, technicianFilter, equipmentFilter]);
+  }, [isAdmin, activeTab, technicianFilter, equipmentFilter]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     fetchCounts();
-  }, [technicianFilter, equipmentFilter]);
+  }, [isAdmin, technicianFilter, equipmentFilter]);
 
   const buildParams = (tab: string) => {
     const params = new URLSearchParams();
@@ -149,6 +154,10 @@ export default function OSListClient() {
         </Link>
       </div>
 
+      {!isAdmin && <OSTechBoard />}
+
+      {isAdmin && (
+      <>
       {/* Filters: técnico e equipamento */}
       <div className="flex flex-col sm:flex-row gap-3">
         <Select value={technicianFilter || "all"} onValueChange={(v: string) => setTechnicianFilter(v === "all" ? "" : v)}>
@@ -272,6 +281,8 @@ export default function OSListClient() {
             </Card>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );

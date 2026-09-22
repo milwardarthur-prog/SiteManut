@@ -79,6 +79,14 @@ export async function GET(req: NextRequest) {
         where.status = "FINALIZADA";
         where.deletedAt = null;
         break;
+      case "meu_ativo":
+        // Quadro do próprio técnico: só as OS ativas atribuídas a ele
+        // (exclui finalizadas/rejeitadas — essas ficam nas abas de histórico).
+        delete where.OR;
+        where.technicianId = user?.id;
+        where.deletedAt = null;
+        where.status = { notIn: ["FINALIZADA", "REJEITADA"] };
+        break;
       case "monitor":
         // Quadro de monitoramento (arrastar-e-soltar por técnico) — mostra
         // todo trabalho ativo de todos os técnicos, então é restrito a quem
