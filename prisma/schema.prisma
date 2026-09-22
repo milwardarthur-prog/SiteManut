@@ -239,7 +239,13 @@ model WorkOrder {
   // Campos específicos de REVISÃO (troca de óleo e filtros)
   revisionDate    DateTime?
   oilLiters       String?
-  revisionFilters String? // JSON: { "fuelFilter1": "TROCADO" | "NAO", ... }
+  // JSON: { "fuelFilter1": { status: "TROCADO" | "NAO", stockItemName?, unitPrice? }, ... }
+  // unitPrice é "congelado" no momento em que a revisão é salva (mesma lógica de WorkOrderPart.unitPrice)
+  revisionFilters String?
+  // Óleo usado na revisão — item do Estoque escolhido e custo total (litros × preço/litro),
+  // ambos congelados no momento em que a revisão é salva.
+  oilStockItemName String?
+  oilCost          Float?
 
   technicianId String?
   technician   User?     @relation("TechnicianOrders", fields: [technicianId], references: [id])

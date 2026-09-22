@@ -75,6 +75,81 @@ const FILTER_LABELS: { key: string; label: string }[] = [
   { key: "waterFilter", label: "Filtro de Água" },
 ];
 
+const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Estado de um filtro na Revisão: se foi trocado e, se sim, qual item do
+// Estoque foi usado e o preço "congelado" no momento em que a revisão foi salva.
+type FilterState = { status: "TROCADO" | "NAO"; stockItemName?: string; unitPrice?: number };
+
+// Lê o JSON salvo em revisionFilters — aceita o formato antigo (só a string
+// "TROCADO"/"NAO") e o novo (objeto com item do estoque e preço).
+function parseRevisionFilters(raw: string | null | undefined): Record<string, FilterState> {
+  if (!raw) return {};
+  try {
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object") return {};
+    const out: Record<string, FilterState> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "string") {
+        out[k] = { status: v === "TROCADO" ? "TROCADO" : "NAO" };
+      } else if (v && typeof v === "object") {
+        const o = v as any;
+        out[k] = {
+          status: o.status === "TROCADO" ? "TROCADO" : "NAO",
+          stockItemName: typeof o.stockItemName === "string" ? o.stockItemName : undefined,
+          unitPrice: typeof o.unitPrice === "number" ? o.unitPrice : undefined,
+        };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function computePartsCost(parts: any[]): number {
+  return (parts ?? []).reduce(
+    (sum: number, p: any) => sum + (p?.unitPrice != null ? p.unitPrice * (p?.quantity ?? 1) : 0),
+    0
+  );
+}
+
+function computeRevisionCost(order: any): number {
+  const filters = parseRevisionFilters(order?.revisionFilters);
+  const filtersCost = Object.values(filters).reduce(
+    (s, f) => s + (f.status === "TROCADO" && f.unitPrice != null ? f.unitPrice : 0),
+    0
+  );
+  return filtersCost + (order?.oilCost ?? 0);
+}
+
+// Card de resumo no topo da OS — soma o custo de peças com o de revisão
+// (filtros + óleo), para o custo aparecer de cara, sem precisar rolar a tela.
+function CostSummaryCard({ order }: { order: any }) {
+  const partsCost = computePartsCost(order?.parts ?? []);
+  const revisionCost = order?.scope === "REVISAO" ? computeRevisionCost(order) : 0;
+  const total = partsCost + revisionCost;
+  const hasBreakdown = order?.scope === "REVISAO" && (partsCost > 0 || revisionCost > 0);
+
+  return (
+    <Card className="border-0 shadow-sm bg-gray-50">
+      <CardContent className="p-4 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <Package className="w-4 h-4 text-orange-500" /> Custo total da OS
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-bold text-gray-900">{fmtPrice(total)}</div>
+          {hasBreakdown && (
+            <div className="text-xs text-muted-foreground">
+              Peças: {fmtPrice(partsCost)} · Revisão: {fmtPrice(revisionCost)}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function OSDetailClient({ id }: { id: string }) {
   const { data: session } = useSession() || {};
   const router = useRouter();
@@ -82,6 +157,7 @@ export default function OSDetailClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [stockItems, setStockItems] = useState<{ id: string; name: string; price: number }[]>([]);
 
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const userId = (session?.user as any)?.id;
@@ -98,6 +174,10 @@ export default function OSDetailClient({ id }: { id: string }) {
   useEffect(() => {
     fetchOrder();
     fetch("/api/users/technicians").then((r) => r.json()).then(setTechnicians).catch(() => {});
+    fetch("/api/estoque/lookup")
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setStockItems(d.items ?? []))
+      .catch(() => {});
   }, [fetchOrder]);
 
   const doAction = async (action: string) => {
@@ -271,6 +351,9 @@ export default function OSDetailClient({ id }: { id: string }) {
         </InfoCard>
       </div>
 
+      {/* Custo total da OS (peças + revisão, quando houver) */}
+      <CostSummaryCard order={order} />
+
       {/* Admin notes */}
       {isAdmin && (
         <AdminNotesSection orderId={id} currentNotes={order?.adminNotes ?? ""} onSaved={fetchOrder} />
@@ -301,14 +384,14 @@ export default function OSDetailClient({ id }: { id: string }) {
 
       {/* Revisão */}
       {order?.scope === "REVISAO" && (
-        <RevisionSection order={order} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
+        <RevisionSection order={order} canEdit={canEdit || isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
       )}
 
       {/* Comments (histórico) */}
       <CommentsSection orderId={id} comments={order?.technicalComments ?? []} legacyComments={order?.comments ?? ""} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
 
       {/* Parts */}
-      <PartsSection orderId={id} parts={order?.parts ?? []} canEdit={canEdit} onSaved={fetchOrder} />
+      <PartsSection orderId={id} parts={order?.parts ?? []} canEdit={canEdit} stockItems={stockItems} onSaved={fetchOrder} />
 
       {/* Helpers - VITAL section */}
       {isExecuting && (
@@ -604,33 +687,95 @@ function LoadTestSection({ order, canEdit, onSaved }: { order: any; canEdit: boo
   );
 }
 
+// Tenta sugerir um item do Estoque para um código de filtro (ex.: "PSL900"),
+// já que no Estoque o código normalmente aparece dentro de um nome maior
+// (ex.: "6 - P558615 - FILTRO LUB CUMMINS..."). É só uma sugestão inicial —
+// o usuário sempre pode digitar e escolher outro item.
+function guessStockItem(
+  code: string | null | undefined,
+  stockItems: { id: string; name: string; price: number }[]
+): { name: string; price: number } | null {
+  const c = (code ?? "").trim().toUpperCase();
+  if (!c) return null;
+  const match = stockItems.find((i) => i.name.toUpperCase().includes(c));
+  return match ? { name: match.name, price: match.price } : null;
+}
+
 /* Revisão — troca de óleo e filtros */
-function RevisionSection({ order, canEdit, onSaved }: { order: any; canEdit: boolean; onSaved: () => void }) {
+function RevisionSection({
+  order,
+  canEdit,
+  stockItems,
+  onSaved,
+}: {
+  order: any;
+  canEdit: boolean;
+  stockItems: { id: string; name: string; price: number }[];
+  onSaved: () => void;
+}) {
   const toDateInput = (v: any) => (v ? new Date(v).toISOString().slice(0, 10) : "");
   const equip = order?.equipment ?? {};
   // Filtros cadastrados no equipamento (campos não vazios)
   const equipFilters = FILTER_LABELS.filter((f) => equip?.[f.key] && String(equip[f.key]).trim() !== "");
 
-  // Estado inicial dos filtros a partir do JSON salvo
-  const parseSaved = (): Record<string, string> => {
-    try {
-      const obj = order?.revisionFilters ? JSON.parse(order.revisionFilters) : {};
-      return obj && typeof obj === "object" ? obj : {};
-    } catch { return {}; }
-  };
-
   const [revisionDate, setRevisionDate] = useState<string>(toDateInput(order?.revisionDate));
   const [horimeter, setHorimeter] = useState<string>(order?.horimeter != null ? String(order.horimeter) : "");
   const [oilLiters, setOilLiters] = useState<string>(order?.oilLiters ?? "");
-  const [filterStates, setFilterStates] = useState<Record<string, string>>(parseSaved());
+  const [oilStockItemName, setOilStockItemName] = useState<string>(order?.oilStockItemName ?? "");
+  const [filterStates, setFilterStates] = useState<Record<string, FilterState>>(
+    parseRevisionFilters(order?.revisionFilters)
+  );
   const [saving, setSaving] = useState(false);
+
+  const stockByName = new Map(stockItems.map((i) => [i.name, i]));
+  const oilStockItem = stockByName.get(oilStockItemName);
+  const oilLitersNum = parseFloat(oilLiters) || 0;
+  const oilCost = oilStockItem && oilLitersNum > 0 ? oilStockItem.price * oilLitersNum : 0;
+
+  const filtersCost = equipFilters.reduce((sum, f) => {
+    const st = filterStates[f.key];
+    return sum + (st?.status === "TROCADO" && st.unitPrice != null ? st.unitPrice : 0);
+  }, 0);
+  const revisionCost = filtersCost + oilCost;
+  const hasUnpricedFilter = equipFilters.some((f) => filterStates[f.key]?.status === "TROCADO" && filterStates[f.key]?.unitPrice == null);
+
+  const setFilterStockItemName = (key: string, name: string) => {
+    const match = stockByName.get(name);
+    setFilterStates({
+      ...filterStates,
+      [key]: { status: "TROCADO", stockItemName: name, unitPrice: match?.price },
+    });
+  };
+
+  const toggleFilterStatus = (key: string, status: "TROCADO" | "NAO") => {
+    if (status === "NAO") {
+      setFilterStates({ ...filterStates, [key]: { status: "NAO" } });
+      return;
+    }
+    // Ao marcar como trocado pela primeira vez, sugere um item do Estoque
+    // pelo código do filtro cadastrado no equipamento (o usuário pode trocar).
+    const current = filterStates[key];
+    if (current?.stockItemName) {
+      setFilterStates({ ...filterStates, [key]: { ...current, status: "TROCADO" } });
+      return;
+    }
+    const guess = guessStockItem(equip?.[key], stockItems);
+    setFilterStates({
+      ...filterStates,
+      [key]: { status: "TROCADO", stockItemName: guess?.name, unitPrice: guess?.price },
+    });
+  };
 
   const save = async () => {
     setSaving(true);
     try {
-      const filters: Record<string, string> = {};
+      const filters: Record<string, FilterState> = {};
       for (const f of equipFilters) {
-        filters[f.key] = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+        const st = filterStates[f.key];
+        filters[f.key] =
+          st?.status === "TROCADO"
+            ? { status: "TROCADO", stockItemName: st.stockItemName, unitPrice: st.unitPrice }
+            : { status: "NAO" };
       }
       const res = await fetch(`/api/os/${order?.id}`, {
         method: "PUT",
@@ -640,6 +785,8 @@ function RevisionSection({ order, canEdit, onSaved }: { order: any; canEdit: boo
           horimeter: horimeter === "" ? null : parseFloat(horimeter),
           oilLiters: oilLiters || null,
           revisionFilters: filters,
+          oilStockItemName: oilStockItem ? oilStockItemName : null,
+          oilCost: oilStockItem && oilLitersNum > 0 ? oilCost : null,
         }),
       });
       if (res.ok) { toast.success("Revisão salva!"); onSaved(); }
@@ -669,44 +816,100 @@ function RevisionSection({ order, canEdit, onSaved }: { order: any; canEdit: boo
         </div>
 
         <div>
+          <Label className="text-xs">Óleo usado (Estoque)</Label>
+          <Input
+            list="stock-items-datalist-revisao"
+            value={oilStockItemName}
+            onChange={(e: any) => setOilStockItemName(e?.target?.value ?? "")}
+            disabled={!canEdit}
+            className="bg-white"
+            placeholder="Buscar item do Estoque..."
+          />
+          {oilStockItem ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              {fmtPrice(oilStockItem.price)}/L × {oilLitersNum || 0}L = <strong>{fmtPrice(oilCost)}</strong>
+            </p>
+          ) : oilStockItemName ? (
+            <p className="text-xs text-amber-600 mt-1">Item não encontrado no Estoque — não entra no custo.</p>
+          ) : null}
+        </div>
+
+        <div>
           <Label className="text-xs">Filtros do Equipamento</Label>
           {equipFilters.length === 0 ? (
             <p className="text-xs text-amber-600 mt-1">Nenhum filtro cadastrado neste equipamento.</p>
           ) : (
             <div className="space-y-2 mt-1">
               {equipFilters.map((f) => {
-                const state = filterStates[f.key] === "TROCADO" ? "TROCADO" : "NAO";
+                const st = filterStates[f.key];
+                const state = st?.status === "TROCADO" ? "TROCADO" : "NAO";
                 return (
-                  <div key={f.key} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 bg-white">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{f.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{equip?.[f.key]}</p>
+                  <div key={f.key} className="p-2.5 rounded-lg border border-gray-200 bg-white space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{f.label}</p>
+                        <p className="text-xs text-muted-foreground truncate">{equip?.[f.key]}</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        {[{ v: "NAO", l: "Não trocado" }, { v: "TROCADO", l: "Trocado" }].map((opt) => (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            disabled={!canEdit}
+                            onClick={() => toggleFilterStatus(f.key, opt.v as "TROCADO" | "NAO")}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                              state === opt.v
+                                ? opt.v === "TROCADO"
+                                  ? "bg-green-500 text-white border-green-500"
+                                  : "bg-gray-500 text-white border-gray-500"
+                                : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                            } ${!canEdit ? "opacity-60 cursor-not-allowed" : ""}`}
+                          >
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      {[{ v: "NAO", l: "Não trocado" }, { v: "TROCADO", l: "Trocado" }].map((opt) => (
-                        <button
-                          key={opt.v}
-                          type="button"
+                    {state === "TROCADO" && (
+                      <div>
+                        <Input
+                          list="stock-items-datalist-revisao"
+                          value={st?.stockItemName ?? ""}
+                          onChange={(e: any) => setFilterStockItemName(f.key, e?.target?.value ?? "")}
                           disabled={!canEdit}
-                          onClick={() => setFilterStates({ ...filterStates, [f.key]: opt.v })}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-                            state === opt.v
-                              ? opt.v === "TROCADO"
-                                ? "bg-green-500 text-white border-green-500"
-                                : "bg-gray-500 text-white border-gray-500"
-                              : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
-                          } ${!canEdit ? "opacity-60 cursor-not-allowed" : ""}`}
-                        >
-                          {opt.l}
-                        </button>
-                      ))}
-                    </div>
+                          className="bg-white h-8 text-sm"
+                          placeholder="Buscar item do Estoque..."
+                        />
+                        {st?.unitPrice != null ? (
+                          <p className="text-xs text-muted-foreground mt-1">{fmtPrice(st.unitPrice)}</p>
+                        ) : st?.stockItemName ? (
+                          <p className="text-xs text-amber-600 mt-1">Item não encontrado no Estoque — não entra no custo.</p>
+                        ) : (
+                          <p className="text-xs text-amber-600 mt-1">Sem item selecionado — não entra no custo.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           )}
+          <datalist id="stock-items-datalist-revisao">
+            {stockItems.map((i) => (
+              <option key={i.id} value={i.name} />
+            ))}
+          </datalist>
         </div>
+
+        <div className="flex items-center justify-between px-1 pt-2 border-t text-sm font-medium">
+          <span>Custo da revisão (filtros + óleo)</span>
+          <span>{fmtPrice(revisionCost)}</span>
+        </div>
+        {hasUnpricedFilter && (
+          <p className="text-xs text-amber-600 px-1">
+            Filtros marcados como trocados sem item do Estoque selecionado não entram nesse total.
+          </p>
+        )}
 
         {canEdit && (
           <Button onClick={save} disabled={saving} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white">
@@ -836,26 +1039,25 @@ function CommentsSection({ orderId, comments, legacyComments, canEdit, onSaved }
 }
 
 /* Parts */
-const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-function PartsSection({ orderId, parts, canEdit, onSaved }: { orderId: string; parts: any[]; canEdit: boolean; onSaved: () => void }) {
+function PartsSection({
+  orderId,
+  parts,
+  canEdit,
+  stockItems,
+  onSaved,
+}: {
+  orderId: string;
+  parts: any[];
+  canEdit: boolean;
+  stockItems: { id: string; name: string; price: number }[];
+  onSaved: () => void;
+}) {
   const [desc, setDesc] = useState("");
   const [qty, setQty] = useState("1");
   const [adding, setAdding] = useState(false);
-  const [stockItems, setStockItems] = useState<{ id: string; name: string; price: number }[]>([]);
 
-  const totalCost = (parts ?? []).reduce(
-    (sum: number, p: any) => sum + (p?.unitPrice != null ? p.unitPrice * (p?.quantity ?? 1) : 0),
-    0
-  );
+  const totalCost = computePartsCost(parts);
   const hasUnpriced = (parts ?? []).some((p: any) => p?.unitPrice == null);
-
-  useEffect(() => {
-    fetch("/api/estoque/lookup")
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d) => setStockItems(d.items ?? []))
-      .catch(() => {});
-  }, []);
 
   const selectedStockItem = stockItems.find((i) => i.name === desc);
 

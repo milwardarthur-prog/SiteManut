@@ -112,6 +112,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         data.revisionFilters = body.revisionFilters || null;
       }
     }
+    // Óleo usado na revisão — nome do item do Estoque e custo total, já
+    // calculados no cliente e congelados aqui (mesma lógica das peças).
+    if (body?.oilStockItemName !== undefined) {
+      data.oilStockItemName = body.oilStockItemName || null;
+    }
+    if (body?.oilCost !== undefined) {
+      data.oilCost = body.oilCost === "" || body.oilCost == null ? null : parseFloat(body.oilCost);
+    }
 
     const updated = await prisma.workOrder.update({
       where: { id: params?.id },
