@@ -154,7 +154,7 @@ export default function NovaOSClient() {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        toast.success(isAdmin ? "OS criada e aprovada!" : "OS criada e enviada para aprovação!");
+        toast.success("OS criada!");
         router.replace("/os");
       } else {
         const data = await res.json();
@@ -177,9 +177,7 @@ export default function NovaOSClient() {
         </Link>
         <div>
           <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900">Nova OS</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin ? "A OS será criada já aprovada" : "A OS será enviada para aprovação do gestor"}
-          </p>
+          <p className="text-sm text-muted-foreground">A OS já é criada liberada para execução</p>
         </div>
       </div>
 
@@ -250,7 +248,7 @@ export default function NovaOSClient() {
               </p>
             )}
 
-            {/* Técnico (admin) — com opção "sem técnico" */}
+            {/* Técnico (admin) — pode escolher qualquer um ou deixar sem técnico */}
             {isAdmin && (
               <div className="space-y-2">
                 <Label>Técnico Responsável</Label>
@@ -264,6 +262,19 @@ export default function NovaOSClient() {
                   </SelectContent>
                 </Select>
               </div>
+            )}
+
+            {/* Técnico (não-admin) — só "eu mesmo" (padrão) ou sem técnico */}
+            {!isAdmin && (
+              <OptionGroup
+                label="Responsável"
+                value={form.technicianId === "NONE" ? "NONE" : "SELF"}
+                onChange={(v) => setForm({ ...form, technicianId: v === "NONE" ? "NONE" : "" })}
+                options={[
+                  { value: "SELF", label: "Eu mesmo" },
+                  { value: "NONE", label: "Sem técnico (deixar disponível)" },
+                ]}
+              />
             )}
 
             {/* Horímetro — comum */}

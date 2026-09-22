@@ -145,18 +145,20 @@ export async function POST(req: NextRequest) {
 
     const isAdmin = user?.role === "ADMIN";
 
-    // Definir técnico: admin pode deixar sem técnico (null) ou escolher.
-    // Técnico comum é auto-atribuído.
+    // Definir técnico: admin pode escolher qualquer um ou deixar sem técnico.
+    // Técnico comum só escolhe entre "eu mesmo" (padrão) ou sem técnico — a
+    // escolha de um colega específico é exclusiva do gestor. O servidor nunca
+    // confia num technicianId vindo de um técnico que não seja o próprio id.
     let assignedTech: string | null;
     if (isAdmin) {
       assignedTech = technicianId || null;
     } else {
-      assignedTech = user?.id;
+      assignedTech = technicianId === "NONE" ? null : user?.id;
     }
 
-    // Todos os escopos seguem o fluxo normal de aprovação.
-    // Gestor cria já aprovada; técnico cria pendente de aprovação.
-    const initialStatus: string = isAdmin ? "APROVADA" : "PENDENTE_APROVACAO";
+    // Não há mais etapa de aprovação — toda OS nasce já liberada para
+    // execução, com ou sem técnico designado (quem cria escolhe).
+    const initialStatus: string = "APROVADA";
 
     const data: any = {
       status: initialStatus,
