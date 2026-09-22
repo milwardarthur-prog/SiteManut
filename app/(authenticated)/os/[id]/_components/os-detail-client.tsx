@@ -19,6 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import {
+  parseRevisionFilters,
+  computePartsCost,
+  computeRevisionCost,
+  type RevisionFilterState,
+} from "@/lib/os-cost";
 
 const statusLabels: Record<string, string> = {
   PENDENTE_APROVACAO: "Pendente Aprovação",
@@ -81,51 +87,9 @@ const OIL_PRODUCT_NAME = "OLEO 15W40 CI-4 YPF 20 LITROS";
 
 const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-// Estado de um filtro na Revisão: se foi trocado e, se sim, qual item do
-// Estoque foi usado e o preço "congelado" no momento em que a revisão foi salva.
-type FilterState = { status: "TROCADO" | "NAO"; stockItemName?: string; unitPrice?: number };
-
-// Lê o JSON salvo em revisionFilters — aceita o formato antigo (só a string
-// "TROCADO"/"NAO") e o novo (objeto com item do estoque e preço).
-function parseRevisionFilters(raw: string | null | undefined): Record<string, FilterState> {
-  if (!raw) return {};
-  try {
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return {};
-    const out: Record<string, FilterState> = {};
-    for (const [k, v] of Object.entries(obj)) {
-      if (typeof v === "string") {
-        out[k] = { status: v === "TROCADO" ? "TROCADO" : "NAO" };
-      } else if (v && typeof v === "object") {
-        const o = v as any;
-        out[k] = {
-          status: o.status === "TROCADO" ? "TROCADO" : "NAO",
-          stockItemName: typeof o.stockItemName === "string" ? o.stockItemName : undefined,
-          unitPrice: typeof o.unitPrice === "number" ? o.unitPrice : undefined,
-        };
-      }
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
-function computePartsCost(parts: any[]): number {
-  return (parts ?? []).reduce(
-    (sum: number, p: any) => sum + (p?.unitPrice != null ? p.unitPrice * (p?.quantity ?? 1) : 0),
-    0
-  );
-}
-
-function computeRevisionCost(order: any): number {
-  const filters = parseRevisionFilters(order?.revisionFilters);
-  const filtersCost = Object.values(filters).reduce(
-    (s, f) => s + (f.status === "TROCADO" && f.unitPrice != null ? f.unitPrice : 0),
-    0
-  );
-  return filtersCost + (order?.oilCost ?? 0);
-}
+// Estado de um filtro na Revisão — tipo local só para o formulário (o cálculo
+// em si vive em lib/os-cost.ts, compartilhado com as estatísticas de custo).
+type FilterState = RevisionFilterState;
 
 // Card de resumo no topo da OS — soma o custo de peças com o de revisão
 // (filtros + óleo), para o custo aparecer de cara, sem precisar rolar a tela.
