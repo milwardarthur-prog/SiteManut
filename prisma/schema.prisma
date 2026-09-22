@@ -280,6 +280,10 @@ model WorkOrderPart {
   id          String    @id @default(cuid())
   description String
   quantity    Int       @default(1)
+  // Preço unitário "congelado" no momento em que a peça foi adicionada (do
+  // Estoque, quando o nome bate; null quando o item não está no Estoque).
+  // Assim o custo da OS não muda se o preço do item mudar depois.
+  unitPrice   Float?
   workOrderId String
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())

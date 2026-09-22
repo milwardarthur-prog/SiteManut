@@ -836,11 +836,19 @@ function CommentsSection({ orderId, comments, legacyComments, canEdit, onSaved }
 }
 
 /* Parts */
+const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 function PartsSection({ orderId, parts, canEdit, onSaved }: { orderId: string; parts: any[]; canEdit: boolean; onSaved: () => void }) {
   const [desc, setDesc] = useState("");
   const [qty, setQty] = useState("1");
   const [adding, setAdding] = useState(false);
   const [stockItems, setStockItems] = useState<{ id: string; name: string; price: number }[]>([]);
+
+  const totalCost = (parts ?? []).reduce(
+    (sum: number, p: any) => sum + (p?.unitPrice != null ? p.unitPrice * (p?.quantity ?? 1) : 0),
+    0
+  );
+  const hasUnpriced = (parts ?? []).some((p: any) => p?.unitPrice == null);
 
   useEffect(() => {
     fetch("/api/estoque/lookup")
@@ -882,17 +890,33 @@ function PartsSection({ orderId, parts, canEdit, onSaved }: { orderId: string; p
       </CardHeader>
       <CardContent>
         {(parts?.length ?? 0) > 0 && (
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2 mb-3">
             {(parts ?? []).map((p: any) => (
               <div key={p?.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                <span className="text-sm">{p?.description} <span className="text-muted-foreground">(x{p?.quantity ?? 1})</span></span>
-                {canEdit && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removePart(p?.id)}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                )}
+                <span className="text-sm">
+                  {p?.description} <span className="text-muted-foreground">(x{p?.quantity ?? 1})</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    {p?.unitPrice != null ? fmtPrice(p.unitPrice * (p?.quantity ?? 1)) : "Sem preço no estoque"}
+                  </span>
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removePart(p?.id)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
+            <div className="flex items-center justify-between px-2 pt-1 border-t text-sm font-medium">
+              <span>Custo total das peças</span>
+              <span>{fmtPrice(totalCost)}</span>
+            </div>
+            {hasUnpriced && (
+              <p className="text-xs text-amber-600 px-2">
+                Algumas peças não têm preço no Estoque e não entram nesse total.
+              </p>
+            )}
           </div>
         )}
         {canEdit && (

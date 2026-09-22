@@ -12,10 +12,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     const { description, quantity } = await req.json();
     if (!description) return NextResponse.json({ error: "Descrição é obrigatória" }, { status: 400 });
+
+    // "Congela" o preço do Estoque no momento em que a peça é adicionada (se o
+    // nome bater), para o custo da OS não mudar se o preço do item mudar depois.
+    const name = String(description).trim().replace(/\s+/g, " ");
+    const stockItem = await prisma.stockItem.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+      select: { price: true },
+    });
+
     const part = await prisma.workOrderPart.create({
       data: {
         description,
         quantity: quantity ?? 1,
+        unitPrice: stockItem?.price ?? null,
         workOrderId: params?.id,
       },
     });
