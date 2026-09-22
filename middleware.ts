@@ -15,8 +15,12 @@ export default withAuth(
       return NextResponse.redirect(new URL("/os", req.url));
     }
 
-    // Estoque é restrito ao usuário com acesso total (não basta ser ADMIN).
-    if (path.startsWith("/estoque") && token?.email !== FULL_ACCESS_EMAIL) {
+    // Estoque e Monitoramento são restritos a quem tem acesso total (não
+    // basta ser ADMIN).
+    if (
+      (path.startsWith("/estoque") || path.startsWith("/monitoramento")) &&
+      token?.email !== FULL_ACCESS_EMAIL
+    ) {
       return NextResponse.redirect(new URL("/horimetros", req.url));
     }
 
@@ -40,5 +44,6 @@ export const config = {
     "/horimetros/:path*",
     "/scanner/:path*",
     "/estoque/:path*",
+    "/monitoramento/:path*",
   ],
 };

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { FULL_ACCESS_EMAIL } from "@/lib/access";
 
 // Campos específicos de checklist e teste de carga
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
@@ -77,6 +78,17 @@ export async function GET(req: NextRequest) {
       case "finalizadas":
         where.status = "FINALIZADA";
         where.deletedAt = null;
+        break;
+      case "monitor":
+        // Quadro de monitoramento (arrastar-e-soltar por técnico) — mostra
+        // todo trabalho ativo de todos os técnicos, então é restrito a quem
+        // tem acesso total (mesmo critério do Estoque).
+        if (user?.email !== FULL_ACCESS_EMAIL) {
+          return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+        }
+        delete where.OR;
+        where.deletedAt = null;
+        where.status = { notIn: ["FINALIZADA", "REJEITADA"] };
         break;
       case "rejeitadas":
         where.OR = [{ status: "REJEITADA" }, { deletedAt: { not: null } }];

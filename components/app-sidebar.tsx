@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
+  Kanban,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ const restrictedAdminLinks = [{ href: "/horimetros", label: "Horímetros", icon:
 const fullAdminLinks = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/os", label: "Ordens de Serviço", icon: ClipboardList },
+  { href: "/monitoramento", label: "Monitoramento", icon: Kanban },
   { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
   { href: "/horimetros", label: "Horímetros", icon: Gauge },
   { href: "/estoque", label: "Estoque", icon: Package },
