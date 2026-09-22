@@ -75,6 +75,10 @@ const FILTER_LABELS: { key: string; label: string }[] = [
   { key: "waterFilter", label: "Filtro de Água" },
 ];
 
+// Óleo do motor usado nas revisões é sempre o mesmo produto do Estoque —
+// por isso não é escolhido manualmente, só os litros usados.
+const OIL_PRODUCT_NAME = "OLEO 15W40 CI-4 YPF 20 LITROS";
+
 const fmtPrice = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // Estado de um filtro na Revisão: se foi trocado e, se sim, qual item do
@@ -721,14 +725,14 @@ function RevisionSection({
   const [revisionDate, setRevisionDate] = useState<string>(toDateInput(order?.revisionDate));
   const [horimeter, setHorimeter] = useState<string>(order?.horimeter != null ? String(order.horimeter) : "");
   const [oilLiters, setOilLiters] = useState<string>(order?.oilLiters ?? "");
-  const [oilStockItemName, setOilStockItemName] = useState<string>(order?.oilStockItemName ?? "");
   const [filterStates, setFilterStates] = useState<Record<string, FilterState>>(
     parseRevisionFilters(order?.revisionFilters)
   );
   const [saving, setSaving] = useState(false);
 
   const stockByName = new Map(stockItems.map((i) => [i.name, i]));
-  const oilStockItem = stockByName.get(oilStockItemName);
+  // Óleo do motor é sempre o mesmo produto — não há escolha manual, só litros.
+  const oilStockItem = stockItems.find((i) => i.name.trim().toUpperCase() === OIL_PRODUCT_NAME);
   const oilLitersNum = parseFloat(oilLiters) || 0;
   const oilCost = oilStockItem && oilLitersNum > 0 ? oilStockItem.price * oilLitersNum : 0;
 
@@ -785,7 +789,7 @@ function RevisionSection({
           horimeter: horimeter === "" ? null : parseFloat(horimeter),
           oilLiters: oilLiters || null,
           revisionFilters: filters,
-          oilStockItemName: oilStockItem ? oilStockItemName : null,
+          oilStockItemName: oilStockItem ? oilStockItem.name : null,
           oilCost: oilStockItem && oilLitersNum > 0 ? oilCost : null,
         }),
       });
@@ -810,28 +814,18 @@ function RevisionSection({
             <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
           </div>
           <div>
-            <Label className="text-xs">Óleo do Motor (litros)</Label>
+            <Label className="text-xs">Óleo 15W40 (litros)</Label>
             <Input type="number" step="0.1" value={oilLiters} onChange={(e: any) => setOilLiters(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" placeholder="Ex: 12.5" />
+            {oilStockItem ? (
+              <p className="text-xs text-muted-foreground mt-1">
+                {fmtPrice(oilStockItem.price)}/L × {oilLitersNum || 0}L = <strong>{fmtPrice(oilCost)}</strong>
+              </p>
+            ) : (
+              <p className="text-xs text-amber-600 mt-1">
+                "{OIL_PRODUCT_NAME}" não encontrado no Estoque — não entra no custo.
+              </p>
+            )}
           </div>
-        </div>
-
-        <div>
-          <Label className="text-xs">Óleo usado (Estoque)</Label>
-          <Input
-            list="stock-items-datalist-revisao"
-            value={oilStockItemName}
-            onChange={(e: any) => setOilStockItemName(e?.target?.value ?? "")}
-            disabled={!canEdit}
-            className="bg-white"
-            placeholder="Buscar item do Estoque..."
-          />
-          {oilStockItem ? (
-            <p className="text-xs text-muted-foreground mt-1">
-              {fmtPrice(oilStockItem.price)}/L × {oilLitersNum || 0}L = <strong>{fmtPrice(oilCost)}</strong>
-            </p>
-          ) : oilStockItemName ? (
-            <p className="text-xs text-amber-600 mt-1">Item não encontrado no Estoque — não entra no custo.</p>
-          ) : null}
         </div>
 
         <div>
