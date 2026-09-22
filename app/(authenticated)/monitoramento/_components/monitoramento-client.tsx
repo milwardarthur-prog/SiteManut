@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Kanban, Clock, Loader2, Inbox, CircleSlash } from "lucide-react";
+import { Kanban, Clock, Loader2, Inbox, CircleSlash, MessageSquare, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const typeLabels: Record<string, string> = { PREVENTIVA: "Preventiva", CORRETIVA: "Corretiva", RETRABALHO: "Retrabalho" };
 const typeColors: Record<string, string> = {
@@ -64,6 +65,9 @@ export default function MonitoramentoClient() {
   const [loading, setLoading] = useState(true);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const draggingRef = useRef(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<any>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   useEffect(() => {
     if (sessionStatus === "authenticated" && !isAdmin) {
@@ -123,6 +127,20 @@ export default function MonitoramentoClient() {
     draggingRef.current = false;
     setDragOverKey(null);
   };
+  const openSummary = async (orderId: string) => {
+    setSelectedId(orderId);
+    setSummary(null);
+    setSummaryLoading(true);
+    try {
+      const res = await fetch(`/api/os/${orderId}`);
+      if (res.ok) setSummary(await res.json());
+    } catch {
+      /* ignore */
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const onColumnDrop = (e: React.DragEvent, technicianId: string | null) => {
     e.preventDefault();
     const orderId = e.dataTransfer.getData("text/plain");
@@ -184,7 +202,7 @@ export default function MonitoramentoClient() {
           ) : (
             <div className="flex gap-3 overflow-x-auto pb-1">
               {backlog.map((o) => (
-                <OrderCard key={o.id} order={o} onDragStart={onCardDragStart} onDragEnd={onCardDragEnd} />
+                <OrderCard key={o.id} order={o} onDragStart={onCardDragStart} onDragEnd={onCardDragEnd} onClick={openSummary} />
               ))}
             </div>
           )}
@@ -219,7 +237,7 @@ export default function MonitoramentoClient() {
                 ) : (
                   <div className="space-y-2">
                     {techOrders.map((o) => (
-                      <OrderCard key={o.id} order={o} onDragStart={onCardDragStart} onDragEnd={onCardDragEnd} />
+                      <OrderCard key={o.id} order={o} onDragStart={onCardDragStart} onDragEnd={onCardDragEnd} onClick={openSummary} />
                     ))}
                   </div>
                 )}
@@ -231,6 +249,71 @@ export default function MonitoramentoClient() {
           )}
         </div>
       </div>
+
+      {/* Resumo da OS — aberto ao clicar num card */}
+      <Dialog open={!!selectedId} onOpenChange={(o: boolean) => !o && setSelectedId(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {summary ? `OS #${summary.orderNumber} — ${summary.equipment?.equipmentNumber ?? ""}` : "Resumo da OS"}
+            </DialogTitle>
+          </DialogHeader>
+          {summaryLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+            </div>
+          ) : summary ? (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> Início da atividade
+                </p>
+                <p className="text-sm text-gray-900">
+                  {summary.startedAt ? new Date(summary.startedAt).toLocaleString("pt-BR") : "Ainda não iniciada"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" /> Instruções do Gestor
+                </p>
+                <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                  {summary.adminNotes || "Nenhuma instrução registrada."}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5" /> Comentários Técnicos
+                </p>
+                {(summary.technicalComments?.length ?? 0) > 0 ? (
+                  <div className="space-y-2">
+                    {summary.technicalComments.map((c: any) => (
+                      <div key={c.id} className="text-sm bg-gray-50 rounded-md p-2">
+                        <p className="text-gray-900 whitespace-pre-wrap">{c.content}</p>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          {c.author?.name ?? ""} · {new Date(c.createdAt).toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : summary.comments ? (
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{summary.comments}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">Nenhum comentário registrado.</p>
+                )}
+              </div>
+
+              <Link
+                href={`/os/${summary.id}`}
+                className="text-sm text-orange-600 hover:underline inline-block pt-1"
+              >
+                Ver OS completa →
+              </Link>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -239,10 +322,12 @@ function OrderCard({
   order,
   onDragStart,
   onDragEnd,
+  onClick,
 }: {
   order: any;
   onDragStart: (e: React.DragEvent, orderId: string) => void;
   onDragEnd: () => void;
+  onClick: (orderId: string) => void;
 }) {
   const elapsed = order.status === "EM_EXECUCAO" ? fmtElapsed(order.startedAt) : null;
   const waiting = !order.technicianId ? fmtWaiting(order.createdAt) : null;
@@ -252,12 +337,13 @@ function OrderCard({
       draggable
       onDragStart={(e) => onDragStart(e, order.id)}
       onDragEnd={onDragEnd}
+      onClick={() => onClick(order.id)}
       className="shrink-0 w-56 rounded-lg border bg-white p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5"
     >
-      <Link href={`/os/${order.id}`} className="flex items-center justify-between gap-2 hover:underline">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-gray-900">#{order.orderNumber}</span>
         <span className="text-xs text-gray-500 truncate">{order.equipment?.equipmentNumber}</span>
-      </Link>
+      </div>
       <div className="flex flex-wrap gap-1">
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[order.maintenanceType] ?? "bg-gray-100 text-gray-700"}`}>
           {typeLabels[order.maintenanceType] ?? order.maintenanceType}
