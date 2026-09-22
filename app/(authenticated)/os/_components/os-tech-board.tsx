@@ -121,6 +121,7 @@ export default function OSTechBoard() {
   const doAction = async (orderId: string, action: string, successMsg: string) => {
     setBusyId(orderId);
     actionInFlight.current = true;
+    let ok = false;
     try {
       const res = await fetch(`/api/os/${orderId}/status`, {
         method: "PUT",
@@ -133,13 +134,17 @@ export default function OSTechBoard() {
         return;
       }
       toast.success(successMsg);
-      await fetchBoard(true);
+      ok = true;
     } catch {
       toast.error("Falha de conexão.");
     } finally {
       setBusyId(null);
+      // Só solta a trava depois — senão o próprio guard de fetchBoard bloqueia
+      // essa atualização imediata (feita abaixo) e o quadro só reflete a ação
+      // no próximo poll automático (até 30s depois).
       actionInFlight.current = false;
     }
+    if (ok) await fetchBoard(true);
   };
 
   const sortedMine = [...mine].sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
@@ -155,35 +160,58 @@ export default function OSTechBoard() {
 
   return (
     <div className="space-y-4">
-      {/* Alternância Quadro / Histórico */}
-      <div className="flex gap-2">
+      {/* Alternância Quadro / Histórico — botões largos, fáceis de tocar no celular */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:w-fit">
         <button
           onClick={() => setView("quadro")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-            view === "quadro" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+          className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${
+            view === "quadro" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 active:bg-gray-50"
           }`}
         >
-          <LayoutGrid className="w-3.5 h-3.5" /> Quadro
+          <LayoutGrid className="w-4 h-4" /> Quadro
         </button>
         <button
           onClick={() => setView("historico")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
-            view === "historico" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+          className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${
+            view === "historico" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 active:bg-gray-50"
           }`}
         >
-          <History className="w-3.5 h-3.5" /> Histórico
+          <History className="w-4 h-4" /> Histórico
         </button>
       </div>
 
       {view === "quadro" ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Minhas OS — no celular aparece primeiro: é o que o técnico quer ver ao abrir o app */}
+          <div className="order-1 lg:order-2">
+            <h3 className="font-semibold text-gray-800 mb-2 text-[15px] flex items-center gap-2">
+              <User className="w-4 h-4" /> {userName} ({sortedMine.length})
+            </h3>
+            <p className="text-xs text-muted-foreground mb-2">OS já designadas a você.</p>
+            <div className="rounded-xl border-2 border-gray-200 bg-white p-3 space-y-3 min-h-[100px]">
+              {sortedMine.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">Nenhuma OS ativa atribuída a você.</p>
+              ) : (
+                sortedMine.map((o) => (
+                  <TechCard
+                    key={o.id}
+                    order={o}
+                    busy={busyId === o.id}
+                    onOpen={() => router.push(`/os/${o.id}`)}
+                    actions={<MineActions order={o} busy={busyId === o.id} onAction={doAction} />}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Backlog geral */}
-          <div>
-            <h3 className="font-semibold text-gray-800 mb-2 text-sm flex items-center gap-2">
+          <div className="order-2 lg:order-1">
+            <h3 className="font-semibold text-gray-800 mb-2 text-[15px] flex items-center gap-2">
               <Inbox className="w-4 h-4" /> Backlog ({sortedBacklog.length})
             </h3>
             <p className="text-xs text-muted-foreground mb-2">OS disponíveis — de qualquer técnico, primeiro a pegar.</p>
-            <div className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/60 p-3 space-y-2 min-h-[100px]">
+            <div className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/60 p-3 space-y-3 min-h-[100px]">
               {sortedBacklog.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">Nenhuma OS disponível agora.</p>
               ) : (
@@ -196,37 +224,13 @@ export default function OSTechBoard() {
                     onOpen={() => router.push(`/os/${o.id}`)}
                     actions={
                       <Button
-                        size="sm"
-                        className="bg-cyan-600 hover:bg-cyan-700 text-white h-7 text-xs gap-1"
+                        className="w-full h-10 text-sm gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white"
                         disabled={busyId === o.id}
                         onClick={(e) => { e.stopPropagation(); doAction(o.id, "claim", `${`#${o.orderNumber}`} pegada e iniciada!`); }}
                       >
-                        {busyId === o.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <HandMetal className="w-3 h-3" />} Pegar e Iniciar
+                        {busyId === o.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <HandMetal className="w-4 h-4" />} Pegar e Iniciar
                       </Button>
                     }
-                  />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Minhas OS */}
-          <div>
-            <h3 className="font-semibold text-gray-800 mb-2 text-sm flex items-center gap-2">
-              <User className="w-4 h-4" /> {userName} ({sortedMine.length})
-            </h3>
-            <p className="text-xs text-muted-foreground mb-2">OS já designadas a você.</p>
-            <div className="rounded-xl border-2 border-gray-200 bg-white p-3 space-y-2 min-h-[100px]">
-              {sortedMine.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Nenhuma OS ativa atribuída a você.</p>
-              ) : (
-                sortedMine.map((o) => (
-                  <TechCard
-                    key={o.id}
-                    order={o}
-                    busy={busyId === o.id}
-                    onOpen={() => router.push(`/os/${o.id}`)}
-                    actions={<MineActions order={o} busy={busyId === o.id} onAction={doAction} />}
                   />
                 ))
               )}
@@ -244,20 +248,20 @@ export default function OSTechBoard() {
               <div
                 key={o.id}
                 onClick={() => router.push(`/os/${o.id}`)}
-                className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-white hover:shadow-sm cursor-pointer"
+                className="flex items-center justify-between gap-3 p-3.5 rounded-xl border bg-white active:bg-gray-50 hover:shadow-sm cursor-pointer transition-colors"
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-900">#{o.orderNumber}</span>
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <span className="text-[15px] font-semibold text-gray-900">#{o.orderNumber}</span>
                     {o.deletedAt ? (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-red-100 text-red-800">Excluída</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-red-100 text-red-800">Excluída</span>
                     ) : (
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${statusColors[o.status] ?? "bg-gray-100 text-gray-700"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColors[o.status] ?? "bg-gray-100 text-gray-700"}`}>
                         {statusLabels[o.status] ?? o.status}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{o.equipment?.equipmentNumber} — {o.equipment?.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">{o.equipment?.equipmentNumber} — {o.equipment?.name}</p>
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">
                   {new Date(o.closedAt ?? o.createdAt).toLocaleDateString("pt-BR")}
@@ -275,35 +279,39 @@ function MineActions({ order, busy, onAction }: { order: any; busy: boolean; onA
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   if (order.status === "APROVADA") {
     return (
-      <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white h-7 text-xs gap-1" disabled={busy}
+      <Button className="w-full h-11 text-sm gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" disabled={busy}
         onClick={(e) => { stop(e); onAction(order.id, "start", `#${order.orderNumber} iniciada!`); }}>
-        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />} Iniciar
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Iniciar
       </Button>
     );
   }
   if (order.status === "EM_EXECUCAO") {
     return (
-      <div className="flex gap-1.5">
-        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={busy}
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" className="h-11 text-sm gap-1.5" disabled={busy}
           onClick={(e) => { stop(e); onAction(order.id, "pause", `#${order.orderNumber} pausada.`); }}>
-          <Pause className="w-3 h-3" /> Pausar
+          <Pause className="w-4 h-4" /> Pausar
         </Button>
-        <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white h-7 text-xs gap-1" disabled={busy}
+        <Button className="h-11 text-sm gap-1.5 bg-purple-600 hover:bg-purple-700 text-white" disabled={busy}
           onClick={(e) => { stop(e); onAction(order.id, "tech_close", `#${order.orderNumber} encerrada — aguardando gestor.`); }}>
-          <StopCircle className="w-3 h-3" /> Encerrar
+          <StopCircle className="w-4 h-4" /> Encerrar
         </Button>
       </div>
     );
   }
   if (order.status === "PAUSADA") {
     return (
-      <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white h-7 text-xs gap-1" disabled={busy}
+      <Button className="w-full h-11 text-sm gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" disabled={busy}
         onClick={(e) => { stop(e); onAction(order.id, "resume", `#${order.orderNumber} retomada!`); }}>
-        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />} Retomar
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Retomar
       </Button>
     );
   }
-  return null; // AGUARDANDO_ENCERRAMENTO — sem ação, só espera o gestor
+  return (
+    <p className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2.5 text-center font-medium">
+      Aguardando o gestor encerrar
+    </p>
+  );
 }
 
 function TechCard({
@@ -325,34 +333,39 @@ function TechCard({
   return (
     <div
       onClick={onOpen}
-      className={`rounded-lg border bg-white p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer space-y-1.5 ${busy ? "opacity-60" : ""}`}
+      className={`rounded-xl border bg-white p-3.5 shadow-sm active:bg-gray-50 hover:shadow-md transition-colors cursor-pointer space-y-2.5 ${busy ? "opacity-60" : ""}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-900">#{order.orderNumber}</span>
-        <span className="text-xs text-gray-500 truncate">{order.equipment?.equipmentNumber}</span>
-      </div>
-      <div className="flex flex-wrap gap-1">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[order.maintenanceType] ?? "bg-gray-100 text-gray-700"}`}>
-          {typeLabels[order.maintenanceType] ?? order.maintenanceType}
-        </span>
-        {order.scope !== "NORMAL" && (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${scopeColors[order.scope] ?? "bg-gray-100 text-gray-700"}`}>
-            {scopeLabels[order.scope] ?? order.scope}
-          </span>
-        )}
-        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100 text-gray-700"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-gray-900">#{order.orderNumber}</p>
+          <p className="text-sm text-gray-500 truncate">
+            {order.equipment?.equipmentNumber}
+            {order.equipment?.name ? ` — ${order.equipment.name}` : ""}
+          </p>
+        </div>
+        <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100 text-gray-700"}`}>
           {statusLabels[order.status] ?? order.status}
         </span>
       </div>
+      <div className="flex flex-wrap gap-1.5">
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeColors[order.maintenanceType] ?? "bg-gray-100 text-gray-700"}`}>
+          {typeLabels[order.maintenanceType] ?? order.maintenanceType}
+        </span>
+        {order.scope !== "NORMAL" && (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${scopeColors[order.scope] ?? "bg-gray-100 text-gray-700"}`}>
+            {scopeLabels[order.scope] ?? order.scope}
+          </span>
+        )}
+      </div>
       {elapsed && (
-        <p className="text-[11px] text-green-700 flex items-center gap-1"><Clock className="w-3 h-3" /> {elapsed}</p>
+        <p className="text-xs text-green-700 flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5" /> {elapsed}</p>
       )}
       {wait && (
-        <p className={`text-[11px] flex items-center gap-1 ${wait.veryUrgent ? "text-red-600 font-medium" : wait.urgent ? "text-amber-600" : "text-gray-400"}`}>
-          <Clock className="w-3 h-3" /> Esperando {wait.text}
+        <p className={`text-xs flex items-center gap-1.5 ${wait.veryUrgent ? "text-red-600 font-semibold" : wait.urgent ? "text-amber-600 font-medium" : "text-gray-400"}`}>
+          <Clock className="w-3.5 h-3.5" /> Esperando {wait.text}
         </p>
       )}
-      <div onClick={(e) => e.stopPropagation()}>{actions}</div>
+      <div onClick={(e) => e.stopPropagation()} className="pt-0.5">{actions}</div>
     </div>
   );
 }
