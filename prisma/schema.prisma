@@ -51,6 +51,7 @@ enum LeaseStatus {
 enum ReadingSource {
   MANUAL
   CSV
+  OS
 }
 
 enum MaintenanceSeverity {

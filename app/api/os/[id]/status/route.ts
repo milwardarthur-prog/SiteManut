@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncChecklistToPanel, syncTesteCargaToPanel } from "@/lib/checklist-sync";
+import { syncHorimeterFromRevision } from "@/lib/horimeter-sync";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -98,6 +99,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (action === "final_close") {
       if (current.scope === "CHECKLIST") await syncChecklistToPanel(updated.id);
       else if (current.scope === "TESTE_CARGA") await syncTesteCargaToPanel(updated.id);
+      else if (current.scope === "REVISAO") await syncHorimeterFromRevision(updated.id);
     }
 
     return NextResponse.json(updated);
