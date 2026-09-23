@@ -13,6 +13,15 @@ import { GE_EQUIPAMENTOS, ordenarEquipamentos } from "@/lib/ge-equipamentos";
 
 type Row = Record<string, string>;
 
+// Data vem como "dd/mm/aaaa" (texto) — converte pra timestamp comparável.
+// Sem data ou formato inválido vai pro fim da lista, não pro topo.
+function parseDataBR(d: string | undefined): number {
+  const m = (d ?? "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return -Infinity;
+  const [, dd, mm, yyyy] = m;
+  return new Date(Number(yyyy), Number(mm) - 1, Number(dd)).getTime();
+}
+
 export default function TestesCargaClient() {
   const { data: session } = useSession() || {};
   const isAdmin = (session?.user as any)?.role === "ADMIN";
@@ -82,7 +91,10 @@ export default function TestesCargaClient() {
     }
   };
 
-  const historico = selected ? [...registrosPor(selected)].reverse() : [];
+  // Mais recente primeiro — ordenado pela Data, não pela ordem do CSV.
+  const historico = selected
+    ? [...registrosPor(selected)].sort((a, b) => parseDataBR(b.Data) - parseDataBR(a.Data))
+    : [];
 
   return (
     <div className="space-y-6">
