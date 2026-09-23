@@ -1,6 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
-import { FULL_ACCESS_EMAIL } from "@/lib/access";
+import { hasFullAccess } from "@/lib/access";
 
 export default withAuth(
   function middleware(req) {
@@ -19,7 +19,7 @@ export default withAuth(
     // basta ser ADMIN).
     if (
       (path.startsWith("/estoque") || path.startsWith("/monitoramento")) &&
-      token?.email !== FULL_ACCESS_EMAIL
+      !hasFullAccess(token?.email as string | undefined)
     ) {
       return NextResponse.redirect(new URL("/horimetros", req.url));
     }

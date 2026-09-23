@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FULL_ACCESS_EMAIL } from "@/lib/access";
+import { hasFullAccess } from "@/lib/access";
 
 const restrictedAdminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
 
@@ -68,8 +68,8 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
 
   const user = session?.user as any;
   const isAdmin = user?.role === "ADMIN";
-  const hasFullAccess = isAdmin && user?.email === FULL_ACCESS_EMAIL;
-  const links = isAdmin ? (hasFullAccess ? fullAdminLinks : restrictedAdminLinks) : techLinks;
+  const fullAccess = isAdmin && hasFullAccess(user?.email);
+  const links = isAdmin ? (fullAccess ? fullAdminLinks : restrictedAdminLinks) : techLinks;
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -93,7 +93,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
           }`}
         >
           <Link
-            href={isAdmin ? (hasFullAccess ? "/dashboard" : "/horimetros") : "/os"}
+            href={isAdmin ? (fullAccess ? "/dashboard" : "/horimetros") : "/os"}
             className="flex items-center gap-3 overflow-hidden"
           >
             <div className="w-9 h-9 shrink-0 bg-orange-500 rounded-lg flex items-center justify-center">
