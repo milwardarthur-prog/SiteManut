@@ -77,6 +77,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
     }
 
+    // KM de deslocamento (opcional — em branco quando o serviço é no pátio)
+    if (body?.kmStart !== undefined) {
+      data.kmStart = body.kmStart === "" || body.kmStart == null ? null : parseFloat(body.kmStart);
+    }
+    if (body?.kmEnd !== undefined) {
+      data.kmEnd = body.kmEnd === "" || body.kmEnd == null ? null : parseFloat(body.kmEnd);
+    }
+
     // Admin pode alterar técnico (inclusive remover -> null), tipo e equipamento
     if (isAdmin && body?.technicianId !== undefined) {
       data.technicianId = body.technicianId || null;

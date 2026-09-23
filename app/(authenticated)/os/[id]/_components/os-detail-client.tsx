@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, Play, StopCircle,
   Plus, Trash2, UserPlus, Camera, MessageSquare, Wrench, Clock,
   FileText, Users, Package, Save, Settings, Gauge, ClipboardCheck,
-  Zap, Send, Droplet, Pause, HandMetal,
+  Zap, Send, Droplet, Pause, HandMetal, Car,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,9 @@ import {
   parseRevisionFilters,
   computePartsCost,
   computeRevisionCost,
+  computeKmTraveled,
+  computeTravelCost,
+  KM_TRAVEL_COST_PER_KM,
   type RevisionFilterState,
 } from "@/lib/os-cost";
 
@@ -96,8 +99,15 @@ type FilterState = RevisionFilterState;
 function CostSummaryCard({ order }: { order: any }) {
   const partsCost = computePartsCost(order?.parts ?? []);
   const revisionCost = order?.scope === "REVISAO" ? computeRevisionCost(order) : 0;
-  const total = partsCost + revisionCost;
-  const hasBreakdown = order?.scope === "REVISAO" && (partsCost > 0 || revisionCost > 0);
+  const travelCost = computeTravelCost(order);
+  const total = partsCost + revisionCost + travelCost;
+  const breakdownParts: string[] = [];
+  if (order?.scope === "REVISAO" && (partsCost > 0 || revisionCost > 0)) {
+    breakdownParts.push(`Peças: ${fmtPrice(partsCost)}`, `Revisão: ${fmtPrice(revisionCost)}`);
+  } else if (partsCost > 0) {
+    breakdownParts.push(`Peças: ${fmtPrice(partsCost)}`);
+  }
+  if (travelCost > 0) breakdownParts.push(`Deslocamento: ${fmtPrice(travelCost)}`);
 
   return (
     <Card className="border-0 shadow-sm bg-gray-50">
@@ -107,12 +117,71 @@ function CostSummaryCard({ order }: { order: any }) {
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-gray-900">{fmtPrice(total)}</div>
-          {hasBreakdown && (
-            <div className="text-xs text-muted-foreground">
-              Peças: {fmtPrice(partsCost)} · Revisão: {fmtPrice(revisionCost)}
-            </div>
+          {breakdownParts.length > 0 && (
+            <div className="text-xs text-muted-foreground">{breakdownParts.join(" · ")}</div>
           )}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Deslocamento (KM inicial/final) — vale pra qualquer escopo de OS. Fica em
+// branco quando o serviço é feito no pátio (sem custo de combustível).
+function TravelSection({ order, canEdit, onSaved }: { order: any; canEdit: boolean; onSaved: () => void }) {
+  const [kmStart, setKmStart] = useState<string>(order?.kmStart != null ? String(order.kmStart) : "");
+  const [kmEnd, setKmEnd] = useState<string>(order?.kmEnd != null ? String(order.kmEnd) : "");
+  const [saving, setSaving] = useState(false);
+
+  const start = kmStart === "" ? null : parseFloat(kmStart);
+  const end = kmEnd === "" ? null : parseFloat(kmEnd);
+  const traveled = start != null && end != null ? end - start : null;
+  const cost = traveled != null && traveled > 0 ? traveled * KM_TRAVEL_COST_PER_KM : 0;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/os/${order?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kmStart: start, kmEnd: end }),
+      });
+      if (res.ok) { toast.success("Deslocamento salvo!"); onSaved(); }
+      else toast.error("Erro ao salvar");
+    } catch { toast.error("Erro"); } finally { setSaving(false); }
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2"><Car className="w-4 h-4" /> Deslocamento</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          KM do carro na ida e na volta até o serviço. Deixe em branco se foi um serviço no pátio.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">KM Inicial</Label>
+            <Input type="number" step="0.1" value={kmStart} onChange={(e: any) => setKmStart(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" placeholder="Ex: 45230" />
+          </div>
+          <div>
+            <Label className="text-xs">KM Final</Label>
+            <Input type="number" step="0.1" value={kmEnd} onChange={(e: any) => setKmEnd(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" placeholder="Ex: 45280" />
+          </div>
+        </div>
+        {traveled != null && (
+          <p className={`text-sm font-medium ${traveled < 0 ? "text-red-600" : "text-gray-700"}`}>
+            {traveled < 0
+              ? "KM final não pode ser menor que o inicial."
+              : `${traveled.toLocaleString("pt-BR")} km percorridos — ${fmtPrice(cost)} de combustível`}
+          </p>
+        )}
+        {canEdit && (
+          <Button onClick={save} disabled={saving} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Salvar
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -303,6 +372,9 @@ export default function OSDetailClient({ id }: { id: string }) {
           <InfoRow label="Tipo" value={typeLabels[order?.maintenanceType] ?? ""} />
           <InfoRow label="Equipamento" value={`${order?.equipment?.equipmentNumber ?? ""} - ${order?.equipment?.name ?? ""}`} />
           <InfoRow label="Horímetro" value={order?.horimeter != null ? `${order.horimeter}h` : "-"} />
+          {order?.kmStart != null && order?.kmEnd != null && (
+            <InfoRow label="Deslocamento" value={`${computeKmTraveled(order).toLocaleString("pt-BR")} km`} />
+          )}
           <InfoRow label="Criado por" value={order?.createdBy?.name ?? "-"} />
           <InfoRow label="Abertura" value={order?.createdAt ? new Date(order.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "-"} />
           {order?.startedAt && <InfoRow label="Início" value={new Date(order.startedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} />}
@@ -321,6 +393,10 @@ export default function OSDetailClient({ id }: { id: string }) {
 
       {/* Custo total da OS (peças + revisão, quando houver) */}
       <CostSummaryCard order={order} />
+
+      {/* Deslocamento (KM) — vale pra qualquer escopo de OS; fica em branco
+          quando o serviço é feito no pátio */}
+      <TravelSection order={order} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
 
       {/* Admin notes */}
       {isAdmin && (

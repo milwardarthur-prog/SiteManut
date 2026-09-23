@@ -222,6 +222,12 @@ model WorkOrder {
   totalTimeMinutes Int?
   deletedAt        DateTime?
 
+  // KM rodado no deslocamento até o serviço — opcional (serviços no pátio não
+  // têm deslocamento). Usado para estimar o custo de combustível do carro
+  // (ver KM_TRAVEL_COST_PER_KM em lib/os-cost.ts).
+  kmStart Float?
+  kmEnd   Float?
+
   // Campos específicos de CHECKLIST
   checklistDate    DateTime?
   tankSample       String?

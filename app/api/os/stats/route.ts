@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { computePartsCost, computeRevisionCost } from "@/lib/os-cost";
+import { computePartsCost, computeRevisionCost, computeKmTraveled, computeTravelCost } from "@/lib/os-cost";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -56,6 +56,9 @@ export async function GET(req: NextRequest) {
     let oilLitersTotal = 0;
     let oilCostTotal = 0;
     let revisionsWithOilCount = 0;
+    let kmTotal = 0;
+    let travelCostTotal = 0;
+    let tripsCount = 0;
 
     for (const order of allOrders ?? []) {
       // Status counts
@@ -95,10 +98,11 @@ export async function GET(req: NextRequest) {
         partCounts[key].total += p?.quantity ?? 0;
       }
 
-      // Custo total da OS (peças + revisão)
+      // Custo total da OS (peças + revisão + deslocamento)
       const partsCost = computePartsCost(order?.parts as any);
       const revisionCost = order?.scope === "REVISAO" ? computeRevisionCost(order as any) : 0;
-      const orderCost = partsCost + revisionCost;
+      const travelCost = computeTravelCost(order as any);
+      const orderCost = partsCost + revisionCost + travelCost;
       totalCost += orderCost;
       totalPartsCost += partsCost;
       totalRevisionCost += revisionCost;
@@ -142,6 +146,13 @@ export async function GET(req: NextRequest) {
         oilLitersTotal += parseFloat(order.oilLiters ?? "0") || 0;
         oilCostTotal += order.oilCost;
         revisionsWithOilCount += 1;
+      }
+
+      // Combustível gasto em deslocamento (KM inicial/final preenchidos pelo técnico)
+      if (travelCost > 0) {
+        kmTotal += computeKmTraveled(order as any);
+        travelCostTotal += travelCost;
+        tripsCount += 1;
       }
     }
 
@@ -201,6 +212,11 @@ export async function GET(req: NextRequest) {
           liters: oilLitersTotal,
           cost: oilCostTotal,
           revisionsCount: revisionsWithOilCount,
+        },
+        travel: {
+          km: kmTotal,
+          cost: travelCostTotal,
+          tripsCount,
         },
       },
     });

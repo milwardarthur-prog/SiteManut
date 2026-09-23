@@ -59,14 +59,33 @@ export function computeRevisionCost(order: {
   return filtersCost + (order?.oilCost ?? 0);
 }
 
-// Custo total de uma OS: peças + revisão (quando for o caso).
+// Custo médio de combustível por km rodado no carro até o serviço (o técnico
+// preenche KM inicial/final na OS; serviços no pátio ficam em branco).
+export const KM_TRAVEL_COST_PER_KM = 2.5;
+
+// Km percorridos no deslocamento — 0 quando falta KM inicial ou final (serviço
+// no pátio, por exemplo), ou quando o final ficou menor que o inicial (erro
+// de preenchimento não deve gerar custo negativo).
+export function computeKmTraveled(order: { kmStart?: number | null; kmEnd?: number | null }): number {
+  if (order?.kmStart == null || order?.kmEnd == null) return 0;
+  return Math.max(0, order.kmEnd - order.kmStart);
+}
+
+export function computeTravelCost(order: { kmStart?: number | null; kmEnd?: number | null }): number {
+  return computeKmTraveled(order) * KM_TRAVEL_COST_PER_KM;
+}
+
+// Custo total de uma OS: peças + revisão (quando for o caso) + deslocamento.
 export function computeOrderCost(order: {
   scope?: string | null;
   parts?: { unitPrice: number | null; quantity: number | null }[] | null;
   revisionFilters?: string | null;
   oilCost?: number | null;
+  kmStart?: number | null;
+  kmEnd?: number | null;
 }): number {
   const partsCost = computePartsCost(order?.parts);
   const revisionCost = order?.scope === "REVISAO" ? computeRevisionCost(order) : 0;
-  return partsCost + revisionCost;
+  const travelCost = computeTravelCost(order);
+  return partsCost + revisionCost + travelCost;
 }

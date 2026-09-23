@@ -25,7 +25,7 @@ export default function DashboardCharts({ stats }: { stats: any }) {
   return (
     <div className="space-y-6">
       {/* Custos */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <CostStat label="Custo Total" value={fmtPrice(costs?.totalCost)} />
         <CostStat label="Peças" value={fmtPrice(costs?.totalPartsCost)} />
         <CostStat label="Revisão (óleo+filtros)" value={fmtPrice(costs?.totalRevisionCost)} />
@@ -39,6 +39,11 @@ export default function DashboardCharts({ stats }: { stats: any }) {
           label="Óleo 15W40"
           value={`${(costs?.oil?.liters ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L`}
           hint={fmtPrice(costs?.oil?.cost)}
+        />
+        <CostStat
+          label="Combustível (Deslocamento)"
+          value={fmtPrice(costs?.travel?.cost)}
+          hint={`${(costs?.travel?.km ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} km`}
         />
       </div>
 
