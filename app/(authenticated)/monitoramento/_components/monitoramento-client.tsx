@@ -351,8 +351,8 @@ function OrderCard({
       className="shrink-0 w-56 rounded-lg border bg-white p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-900">#{order.orderNumber}</span>
-        <span className="text-xs text-gray-500 truncate">{order.equipment?.equipmentNumber}</span>
+        <span className="text-sm font-bold text-gray-900 truncate">{order.equipment?.equipmentNumber}</span>
+        <span className="text-xs text-gray-500 shrink-0">#{order.orderNumber}</span>
       </div>
       <div className="flex flex-wrap gap-1">
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[order.maintenanceType] ?? "bg-gray-100 text-gray-700"}`}>
