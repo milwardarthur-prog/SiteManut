@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Kanban, Clock, Loader2, Inbox, CircleSlash, MessageSquare, Wrench } from "lucide-react";
+import { Kanban, Clock, Loader2, Inbox, CircleSlash, MessageSquare, Wrench, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const typeLabels: Record<string, string> = { PREVENTIVA: "Preventiva", CORRETIVA: "Corretiva", RETRABALHO: "Retrabalho" };
@@ -175,13 +176,22 @@ export default function MonitoramentoClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900 flex items-center gap-2">
-          <Kanban className="w-6 h-6 text-orange-500" /> Monitoramento
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Arraste um card do Backlog para a coluna de um técnico para atribuir a atividade a ele. Atualiza a cada 30s.
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900 flex items-center gap-2">
+            <Kanban className="w-6 h-6 text-orange-500" /> Monitoramento
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Arraste um card do Backlog para a coluna de um técnico para atribuir a atividade a ele. Atualiza a cada 30s.
+          </p>
+        </div>
+        {isAdmin && (
+          <Link href="/os/nova">
+            <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Plus className="w-4 h-4 mr-2" /> Nova OS
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Backlog — OS sem técnico designado */}
