@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Inbox, User, Clock, Loader2, Play, Pause, StopCircle, HandMetal, History, LayoutGrid } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Inbox, User, Clock, Loader2, Play, Pause, StopCircle, HandMetal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import PushNotificationButton from "@/components/push-notification-button";
-import InstallAppButton from "@/components/install-app-button";
 import { toast } from "sonner";
 
 const typeLabels: Record<string, string> = { PREVENTIVA: "Preventiva", CORRETIVA: "Corretiva", RETRABALHO: "Retrabalho" };
@@ -61,10 +59,12 @@ function fmtWaiting(createdAt: string): { text: string; urgent: boolean; veryUrg
 export default function OSTechBoard() {
   const { data: session } = useSession() || {};
   const router = useRouter();
+  const searchParams = useSearchParams();
   const userId = (session?.user as any)?.id;
   const userName = (session?.user as any)?.name ?? "Minhas OS";
 
-  const [view, setView] = useState<"quadro" | "historico">("quadro");
+  // Quadro/Histórico agora são escolhidos pelo menu lateral (?view=historico)
+  const view: "quadro" | "historico" = searchParams?.get("view") === "historico" ? "historico" : "quadro";
   const [backlog, setBacklog] = useState<any[]>([]);
   const [mine, setMine] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -162,32 +162,6 @@ export default function OSTechBoard() {
 
   return (
     <div className="space-y-4">
-      {/* Instalar app / ativar notificações — cada um some sozinho quando não se aplica */}
-      <div className="flex flex-wrap gap-2">
-        <InstallAppButton />
-        <PushNotificationButton />
-      </div>
-
-      {/* Alternância Quadro / Histórico — botões largos, fáceis de tocar no celular */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:w-fit">
-        <button
-          onClick={() => setView("quadro")}
-          className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${
-            view === "quadro" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 active:bg-gray-50"
-          }`}
-        >
-          <LayoutGrid className="w-4 h-4" /> Quadro
-        </button>
-        <button
-          onClick={() => setView("historico")}
-          className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors ${
-            view === "historico" ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-700 border-gray-300 active:bg-gray-50"
-          }`}
-        >
-          <History className="w-4 h-4" /> Histórico
-        </button>
-      </div>
-
       {view === "quadro" ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Minhas OS — no celular aparece primeiro: é o que o técnico quer ver ao abrir o app */}

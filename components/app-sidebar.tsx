@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -20,9 +20,13 @@ import {
   ChevronRight,
   Package,
   Kanban,
+  LayoutGrid,
+  History,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import InstallAppButton from "@/components/install-app-button";
+import PushNotificationButton from "@/components/push-notification-button";
 import { hasFullAccess } from "@/lib/access";
 
 const restrictedAdminLinks = [{ href: "/horimetros", label: "Horímetros", icon: Gauge }];
@@ -40,13 +44,19 @@ const fullAdminLinks = [
   { href: "/scanner", label: "Escanear QR", icon: ScanLine },
 ];
 
-const techLinks: typeof restrictedAdminLinks = [];
+// Quadro/Histórico são a mesma página (/os) — a aba ativa vem do parâmetro
+// "view" na URL, então o menu lateral também precisa comparar a query, não só o caminho.
+const techLinks = [
+  { href: "/os", label: "Quadro", icon: LayoutGrid },
+  { href: "/os?view=historico", label: "Histórico", icon: History },
+];
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
 export default function AppSidebar({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession() || {};
   const pathname = usePathname() ?? "";
+  const searchParams = useSearchParams();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -117,7 +127,11 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
 
         <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overflow-x-hidden">
           {links.map((link: any) => {
-            const isActive = pathname === link?.href || pathname?.startsWith(link?.href + "/");
+            const [linkPath, linkQuery] = (link?.href ?? "").split("?");
+            const linkView = linkQuery ? new URLSearchParams(linkQuery).get("view") ?? "" : "";
+            const currentView = searchParams?.get("view") ?? "";
+            const isActive =
+              (pathname === linkPath || pathname?.startsWith(linkPath + "/")) && currentView === linkView;
             const Icon = link?.icon;
             return (
               <Link
@@ -138,6 +152,14 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
               </Link>
             );
           })}
+
+          {/* Ações do PWA — só pro técnico, cada uma some sozinha quando não se aplica */}
+          {!isAdmin && (
+            <div className="pt-3 mt-3 border-t border-gray-800 space-y-1">
+              <InstallAppButton dark />
+              <PushNotificationButton dark />
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-700">

@@ -17,7 +17,10 @@ function urlBase64ToUint8Array(base64String: string) {
 // suporta ou quando já está inscrito. Não dispara o prompt de permissão
 // sozinho: só quando o usuário toca aqui (pedido do navegador do nada tende
 // a ser negado sem contexto).
-export default function PushNotificationButton() {
+const DARK_CLASS =
+  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white transition-colors w-full";
+
+export default function PushNotificationButton({ dark = false }: { dark?: boolean }) {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(true); // esconde até checar, evita "flash"
   const [loading, setLoading] = useState(false);
@@ -70,6 +73,14 @@ export default function PushNotificationButton() {
   };
 
   if (!supported || subscribed) return null;
+
+  if (dark) {
+    return (
+      <button onClick={activate} disabled={loading} className={DARK_CLASS}>
+        {loading ? <Loader2 className="w-5 h-5 shrink-0 animate-spin" /> : <Bell className="w-5 h-5 shrink-0" />} Ativar notificações
+      </button>
+    );
+  }
 
   return (
     <Button onClick={activate} disabled={loading} variant="outline" className="gap-1.5 text-sm h-9">
