@@ -10,6 +10,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Sem cache/offline por enquanto — só repassa a requisição. O Chrome exige um
+// handler de fetch registrado como parte do critério técnico de
+// instalabilidade do PWA, mesmo sem fazer nada de especial aqui.
+self.addEventListener("fetch", (event) => {
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
