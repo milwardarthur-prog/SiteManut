@@ -260,8 +260,13 @@ model WorkOrder {
   createdBy    User      @relation("CreatorOrders", fields: [createdById], references: [id])
   closedById   String?
   closedBy     User?     @relation("CloserOrders", fields: [closedById], references: [id])
-  equipmentId  String
-  equipment    Equipment @relation(fields: [equipmentId], references: [id])
+  // Nulo para itens que ainda não têm patrimônio cadastrado (ex.: em
+  // fabricação) — nesse caso, customEquipmentLabel descreve o item em texto
+  // livre. Quando o item vira patrimônio de verdade, a OS pode ser vinculada
+  // ao Equipment (ver "Vincular equipamento" na tela da OS).
+  equipmentId          String?
+  equipment            Equipment? @relation(fields: [equipmentId], references: [id])
+  customEquipmentLabel String?
 
   parts             WorkOrderPart[]
   helpers           WorkOrderHelper[]

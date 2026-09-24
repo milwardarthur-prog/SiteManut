@@ -10,7 +10,7 @@ import { computeNextReadingDate, type ReadingFrequency } from "@/lib/horimetro";
 export async function syncHorimeterFromRevision(orderId: string): Promise<void> {
   try {
     const order = await prisma.workOrder.findUnique({ where: { id: orderId } });
-    if (!order || order.scope !== "REVISAO" || order.horimeter == null) return;
+    if (!order || order.scope !== "REVISAO" || order.horimeter == null || !order.equipmentId) return;
 
     const equipment = await prisma.equipment.findUnique({
       where: { id: order.equipmentId },

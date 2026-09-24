@@ -187,6 +187,107 @@ function TravelSection({ order, canEdit, onSaved }: { order: any; canEdit: boole
   );
 }
 
+// Item ainda sem patrimônio cadastrado (ex.: em fabricação) — deixa editar a
+// descrição livre e, quando o item virar equipamento de verdade, vincular a
+// OS a ele (o histórico registrado até aqui é mantido).
+function ProvisionalEquipmentSection({
+  order,
+  canEditLabel,
+  isAdmin,
+  onSaved,
+}: {
+  order: any;
+  canEditLabel: boolean;
+  isAdmin: boolean;
+  onSaved: () => void;
+}) {
+  const [label, setLabel] = useState(order?.customEquipmentLabel ?? "");
+  const [savingLabel, setSavingLabel] = useState(false);
+  const [equipments, setEquipments] = useState<any[]>([]);
+  const [equipmentId, setEquipmentId] = useState("");
+  const [linking, setLinking] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetch("/api/equipamentos").then((r) => r.json()).then(setEquipments).catch(() => {});
+  }, [isAdmin]);
+
+  const saveLabel = async () => {
+    setSavingLabel(true);
+    try {
+      const res = await fetch(`/api/os/${order?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customEquipmentLabel: label }),
+      });
+      if (res.ok) { toast.success("Descrição salva!"); onSaved(); }
+      else toast.error("Erro ao salvar");
+    } catch { toast.error("Erro"); } finally { setSavingLabel(false); }
+  };
+
+  const linkEquipment = async () => {
+    if (!equipmentId) { toast.error("Selecione o equipamento"); return; }
+    setLinking(true);
+    try {
+      const res = await fetch(`/api/os/${order?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ equipmentId }),
+      });
+      if (res.ok) { toast.success("Equipamento vinculado!"); onSaved(); }
+      else toast.error("Erro ao vincular");
+    } catch { toast.error("Erro"); } finally { setLinking(false); }
+  };
+
+  return (
+    <Card className="border-2 border-amber-200 shadow-sm bg-amber-50/40">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2 text-amber-800">
+          <Wrench className="w-4 h-4" /> Item sem patrimônio cadastrado
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Descrição do item</Label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              value={label}
+              onChange={(e: any) => setLabel(e?.target?.value ?? "")}
+              disabled={!canEditLabel}
+              className="bg-white"
+              placeholder="Ex: Quadro elétrico QE-04 (em fabricação)"
+            />
+            {canEditLabel && (
+              <Button onClick={saveLabel} disabled={savingLabel} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+                {savingLabel ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Salvar
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {isAdmin && (
+          <div className="space-y-2 border-t border-amber-200 pt-3">
+            <Label className="text-xs">Já virou patrimônio? Vincule o equipamento cadastrado</Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Select value={equipmentId} onValueChange={setEquipmentId}>
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o equipamento" /></SelectTrigger>
+                <SelectContent>
+                  {(equipments ?? []).map((e: any) => (
+                    <SelectItem key={e?.id} value={e?.id ?? ""}>{e?.equipmentNumber} - {e?.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={linkEquipment} disabled={linking} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shrink-0">
+                {linking ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Vincular
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function OSDetailClient({ id }: { id: string }) {
   const { data: session } = useSession() || {};
   const router = useRouter();
@@ -310,7 +411,7 @@ export default function OSDetailClient({ id }: { id: string }) {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {typeLabels[order?.maintenanceType] ?? order?.maintenanceType} • {order?.equipment?.name ?? ""}
+              {typeLabels[order?.maintenanceType] ?? order?.maintenanceType} • {order?.equipment?.name ?? order?.customEquipmentLabel ?? ""}
             </p>
           </div>
         </div>
@@ -365,12 +466,31 @@ export default function OSDetailClient({ id }: { id: string }) {
         </div>
       </div>
 
+      {/* Item sem patrimônio ainda (ex.: em fabricação) */}
+      {!order?.equipmentId && (
+        <ProvisionalEquipmentSection
+          order={order}
+          canEditLabel={canEdit || isAdmin}
+          isAdmin={isAdmin}
+          onSaved={fetchOrder}
+        />
+      )}
+
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard title="Informações da OS" icon={<FileText className="w-4 h-4" />}>
           <InfoRow label="Número" value={`#${order?.orderNumber ?? 0}`} />
           <InfoRow label="Tipo" value={typeLabels[order?.maintenanceType] ?? ""} />
-          <InfoRow label="Equipamento" value={`${order?.equipment?.equipmentNumber ?? ""} - ${order?.equipment?.name ?? ""}`} />
+          <InfoRow
+            label="Equipamento"
+            value={
+              order?.equipment
+                ? `${order.equipment.equipmentNumber ?? ""} - ${order.equipment.name ?? ""}`
+                : order?.customEquipmentLabel
+                ? `${order.customEquipmentLabel} (sem patrimônio)`
+                : "-"
+            }
+          />
           <InfoRow label="Horímetro" value={order?.horimeter != null ? `${order.horimeter}h` : "-"} />
           {order?.kmStart != null && order?.kmEnd != null && (
             <InfoRow label="Deslocamento" value={`${computeKmTraveled(order).toLocaleString("pt-BR")} km`} />

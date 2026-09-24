@@ -71,10 +71,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (adminNotes !== undefined && isAdmin) data.adminNotes = adminNotes;
     if (horimeter !== undefined && horimeter !== "" && horimeter !== null) {
       data.horimeter = parseFloat(horimeter);
-      await prisma.equipment.update({
-        where: { id: current.equipmentId },
-        data: { currentHorimeter: parseFloat(horimeter) },
-      });
+      // Só existe equipamento de verdade pra atualizar quando já está vinculado
+      if (current.equipmentId) {
+        await prisma.equipment.update({
+          where: { id: current.equipmentId },
+          data: { currentHorimeter: parseFloat(horimeter) },
+        });
+      }
     }
 
     // KM de deslocamento (opcional — em branco quando o serviço é no pátio)
@@ -90,7 +93,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       data.technicianId = body.technicianId || null;
     }
     if (isAdmin && body?.maintenanceType) data.maintenanceType = body.maintenanceType;
-    if (isAdmin && body?.equipmentId) data.equipmentId = body.equipmentId;
+    if (isAdmin && body?.equipmentId) {
+      // Vincula a um equipamento de verdade (ex.: item que acabou de virar
+      // patrimônio) — a descrição livre deixa de fazer sentido.
+      data.equipmentId = body.equipmentId;
+      data.customEquipmentLabel = null;
+    }
+    // Descrição livre do item (só enquanto não há equipamento vinculado)
+    if (body?.customEquipmentLabel !== undefined && !current.equipmentId && !data.equipmentId) {
+      data.customEquipmentLabel = String(body.customEquipmentLabel ?? "").trim() || null;
+    }
 
     // Campos de checklist (editáveis por quem tem acesso à OS)
     if (body?.checklistDate !== undefined) {

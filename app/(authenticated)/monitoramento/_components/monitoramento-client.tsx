@@ -265,7 +265,9 @@ export default function MonitoramentoClient() {
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {summary ? `OS #${summary.orderNumber} — ${summary.equipment?.equipmentNumber ?? ""}` : "Resumo da OS"}
+              {summary
+                ? `OS #${summary.orderNumber} — ${summary.equipment?.equipmentNumber ?? summary.customEquipmentLabel ?? ""}`
+                : "Resumo da OS"}
             </DialogTitle>
           </DialogHeader>
           {summaryLoading ? (
@@ -351,7 +353,7 @@ function OrderCard({
       className="shrink-0 w-56 rounded-lg border bg-white p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-bold text-gray-900 truncate">{order.equipment?.equipmentNumber}</span>
+        <span className="text-sm font-bold text-gray-900 truncate">{order.equipment?.equipmentNumber ?? order.customEquipmentLabel}</span>
         <span className="text-xs text-gray-500 shrink-0">#{order.orderNumber}</span>
       </div>
       <div className="flex flex-wrap gap-1">

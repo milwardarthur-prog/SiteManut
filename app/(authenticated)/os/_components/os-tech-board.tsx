@@ -261,7 +261,9 @@ export default function OSTechBoard() {
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">{o.equipment?.equipmentNumber} — {o.equipment?.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {o.equipment ? `${o.equipment?.equipmentNumber} — ${o.equipment?.name}` : o.customEquipmentLabel ?? ""}
+                  </p>
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">
                   {new Date(o.closedAt ?? o.createdAt).toLocaleDateString("pt-BR")}
@@ -339,8 +341,9 @@ function TechCard({
         <div className="min-w-0">
           <p className="text-base font-semibold text-gray-900">#{order.orderNumber}</p>
           <p className="text-sm text-gray-500 truncate">
-            {order.equipment?.equipmentNumber}
-            {order.equipment?.name ? ` — ${order.equipment.name}` : ""}
+            {order.equipment
+              ? `${order.equipment?.equipmentNumber}${order.equipment?.name ? ` — ${order.equipment.name}` : ""}`
+              : order.customEquipmentLabel ?? ""}
           </p>
         </div>
         <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100 text-gray-700"}`}>

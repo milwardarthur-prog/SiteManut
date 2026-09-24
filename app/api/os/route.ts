@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
     const {
       technicianId,
       equipmentId,
+      customEquipmentLabel: rawLabel,
       maintenanceType,
       horimeter,
       comments,
@@ -149,9 +150,16 @@ export async function POST(req: NextRequest) {
     } = body ?? {};
 
     const scope = rawScope || "NORMAL";
+    const customEquipmentLabel = typeof rawLabel === "string" ? rawLabel.trim() : "";
 
-    if (!equipmentId) {
-      return NextResponse.json({ error: "Equipamento é obrigatório" }, { status: 400 });
+    // Item sem patrimônio cadastrado (ex.: em fabricação) só faz sentido pra
+    // OS Normal — Checklist/Teste de Carga/Revisão dependem de dados já
+    // cadastrados no equipamento (filtros, horímetro, etc.).
+    if (!equipmentId && (scope !== "NORMAL" || !customEquipmentLabel)) {
+      return NextResponse.json(
+        { error: scope === "NORMAL" ? "Informe o equipamento ou uma descrição do item" : "Equipamento é obrigatório" },
+        { status: 400 }
+      );
     }
 
     // Checklist, Teste de Carga e Revisão são sempre PREVENTIVA
@@ -188,7 +196,8 @@ export async function POST(req: NextRequest) {
       comments: comments ?? null,
       technicianId: assignedTech,
       createdById: user?.id,
-      equipmentId,
+      equipmentId: equipmentId || null,
+      customEquipmentLabel: equipmentId ? null : customEquipmentLabel,
     };
 
     // Campos de checklist
@@ -233,8 +242,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Atualiza horímetro do equipamento se fornecido
-    if (horimeter) {
+    // Atualiza horímetro do equipamento se fornecido (só existe quando há
+    // um equipamento de verdade vinculado)
+    if (horimeter && equipmentId) {
       await prisma.equipment.update({
         where: { id: equipmentId },
         data: { currentHorimeter: parseFloat(horimeter) },

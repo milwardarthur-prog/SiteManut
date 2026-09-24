@@ -76,6 +76,12 @@ export default function NovaOSClient() {
     comments: "",
   });
 
+  // Item ainda sem patrimônio cadastrado (ex.: em fabricação) — só faz
+  // sentido pra OS Normal; as demais dependem de dados já cadastrados no
+  // equipamento (filtros, horímetro, etc.).
+  const [semPatrimonio, setSemPatrimonio] = useState(false);
+  const [customEquipmentLabel, setCustomEquipmentLabel] = useState("");
+
   // Checklist
   const [checklist, setChecklist] = useState({
     checklistDate: todayStr(),
@@ -112,10 +118,16 @@ export default function NovaOSClient() {
     fetch("/api/equipamentos").then((r) => r.json()).then(setEquipments).catch(() => {});
   }, []);
 
+  const usaPatrimonio = !(scope === "NORMAL" && semPatrimonio);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.equipmentId) {
+    if (usaPatrimonio && !form.equipmentId) {
       toast.error("Equipamento é obrigatório");
+      return;
+    }
+    if (!usaPatrimonio && !customEquipmentLabel.trim()) {
+      toast.error("Descreva o item (ele ainda não tem patrimônio cadastrado)");
       return;
     }
     if (scope === "NORMAL" && !form.maintenanceType) {
@@ -126,7 +138,8 @@ export default function NovaOSClient() {
     try {
       const payload: any = {
         scope,
-        equipmentId: form.equipmentId,
+        equipmentId: usaPatrimonio ? form.equipmentId : "",
+        customEquipmentLabel: usaPatrimonio ? "" : customEquipmentLabel.trim(),
         technicianId: form.technicianId === "NONE" ? "" : form.technicianId,
         horimeter: form.horimeter,
         comments: form.comments,
@@ -214,17 +227,45 @@ export default function NovaOSClient() {
 
             {/* Equipamento — comum a todos */}
             <div className="space-y-2">
-              <Label>Equipamento *</Label>
-              <Select value={form.equipmentId} onValueChange={(v: string) => setForm({ ...form, equipmentId: v })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o equipamento" /></SelectTrigger>
-                <SelectContent>
-                  {(equipments ?? []).map((e: any) => (
-                    <SelectItem key={e?.id} value={e?.id ?? ""}>
-                      {e?.equipmentNumber} - {e?.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label>Equipamento *</Label>
+                {scope === "NORMAL" && (
+                  <button
+                    type="button"
+                    onClick={() => setSemPatrimonio((v) => !v)}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                      semPatrimonio
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-orange-400"
+                    }`}
+                  >
+                    Ainda sem patrimônio (em fabricação)
+                  </button>
+                )}
+              </div>
+              {usaPatrimonio ? (
+                <Select value={form.equipmentId} onValueChange={(v: string) => setForm({ ...form, equipmentId: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o equipamento" /></SelectTrigger>
+                  <SelectContent>
+                    {(equipments ?? []).map((e: any) => (
+                      <SelectItem key={e?.id} value={e?.id ?? ""}>
+                        {e?.equipmentNumber} - {e?.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Ex: Quadro elétrico QE-04 (em fabricação)"
+                    value={customEquipmentLabel}
+                    onChange={(e: any) => setCustomEquipmentLabel(e?.target?.value ?? "")}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use pra itens que ainda não têm número de patrimônio — dá pra vincular a um equipamento cadastrado depois, na tela da OS.
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Tipo de manutenção — só NORMAL */}
@@ -277,17 +318,19 @@ export default function NovaOSClient() {
               />
             )}
 
-            {/* Horímetro — comum */}
-            <div className="space-y-2">
-              <Label>Horímetro do Equipamento</Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="Ex: 1500.5"
-                value={form.horimeter}
-                onChange={(e: any) => setForm({ ...form, horimeter: e?.target?.value ?? "" })}
-              />
-            </div>
+            {/* Horímetro — só faz sentido com um equipamento de verdade vinculado */}
+            {usaPatrimonio && (
+              <div className="space-y-2">
+                <Label>Horímetro do Equipamento</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  placeholder="Ex: 1500.5"
+                  value={form.horimeter}
+                  onChange={(e: any) => setForm({ ...form, horimeter: e?.target?.value ?? "" })}
+                />
+              </div>
+            )}
 
             {/* Campos CHECKLIST */}
             {scope === "CHECKLIST" && (

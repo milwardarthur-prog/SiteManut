@@ -256,7 +256,11 @@ export default function OSListClient() {
                         )}
                       </div>
                       <p className="text-sm text-gray-900 font-medium mt-1">
-                        {order?.equipment?.name ?? ""} ({order?.equipment?.equipmentNumber ?? ""})
+                        {order?.equipment
+                          ? `${order.equipment?.name ?? ""} (${order.equipment?.equipmentNumber ?? ""})`
+                          : order?.customEquipmentLabel
+                          ? `${order.customEquipmentLabel} (sem patrimônio)`
+                          : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Técnico: {order?.technician?.name ?? "Sem técnico"}
