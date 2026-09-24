@@ -3,15 +3,18 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
-// Botão pra instalar o PWA — o Chrome às vezes não mostra (ou esconde bem)
-// o aviso automático de instalação, então isso dá um jeito explícito e
-// sempre visível de instalar. Só aparece quando o navegador sinaliza que dá
-// pra instalar (evento beforeinstallprompt) e some depois de instalado.
+// Botão pra instalar o PWA — sempre visível (exceto se já instalado), pra não
+// depender do Chrome decidir sozinho quando oferecer o aviso automático
+// (isso varia por aparelho e nem sempre acontece). Se o navegador já sinalizou
+// que dá pra instalar (evento beforeinstallprompt), instala direto; senão,
+// mostra o caminho manual pelo menu do Chrome.
 export default function InstallAppButton() {
   const [promptEvent, setPromptEvent] = useState<any>(null);
   const [installed, setInstalled] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,20 +38,41 @@ export default function InstallAppButton() {
   }, []);
 
   const install = async () => {
-    if (!promptEvent) return;
-    promptEvent.prompt();
-    try {
-      const { outcome } = await promptEvent.userChoice;
-      if (outcome === "accepted") toast.success("App instalado!");
-    } catch {}
-    setPromptEvent(null);
+    if (promptEvent) {
+      promptEvent.prompt();
+      try {
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === "accepted") toast.success("App instalado!");
+      } catch {}
+      setPromptEvent(null);
+      return;
+    }
+    // O Chrome ainda não sinalizou instalação automática — orienta o caminho manual.
+    setShowHelp(true);
   };
 
-  if (installed || !promptEvent) return null;
+  if (installed) return null;
 
   return (
-    <Button onClick={install} variant="outline" className="gap-1.5 text-sm h-9">
-      <Download className="w-4 h-4" /> Instalar app
-    </Button>
+    <>
+      <Button onClick={install} variant="outline" className="gap-1.5 text-sm h-9">
+        <Download className="w-4 h-4" /> Instalar app
+      </Button>
+
+      <Dialog open={showHelp} onOpenChange={setShowHelp}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Como instalar</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-700 space-y-3">
+            <p>Toque no menu <strong>⋮</strong> no canto superior direito do Chrome.</p>
+            <p>
+              Escolha a opção <strong>"Instalar aplicativo"</strong> (ou{" "}
+              <strong>"Adicionar à tela inicial"</strong>, dependendo do aparelho).
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
