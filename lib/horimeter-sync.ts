@@ -14,7 +14,7 @@ export async function syncHorimeterFromRevision(orderId: string): Promise<void> 
 
     const equipment = await prisma.equipment.findUnique({
       where: { id: order.equipmentId },
-      select: { id: true, currentHorimeter: true, readingFrequency: true },
+      select: { id: true, currentHorimeter: true, readingFrequency: true, lastMaintenanceDate: true },
     });
     if (!equipment) return;
 
@@ -42,6 +42,14 @@ export async function syncHorimeterFromRevision(orderId: string): Promise<void> 
           currentHorimeter: order.horimeter,
           lastReadingDate: readingDate,
           nextReadingDate: next,
+          // A revisão É a manutenção: zera o contador de horas até a próxima
+          // (mesmo efeito de registrar manutenção manualmente na página de
+          // Horímetros) e encerra um agendamento pendente, se houver.
+          lastMaintenanceHorimeter: order.horimeter,
+          lastMaintenanceDate: readingDate,
+          ...(readingDate.getTime() !== equipment.lastMaintenanceDate?.getTime()
+            ? { maintenanceScheduledDate: null, maintenanceScheduledNote: null }
+            : {}),
         },
       }),
     ]);
