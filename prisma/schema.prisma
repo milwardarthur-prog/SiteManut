@@ -101,6 +101,22 @@ model User {
   locationImports   LocationImport[]     @relation("ImportAuthor")
   equipmentComments EquipmentComment[]   @relation("EquipmentCommentAuthor")
   stockImports      StockImport[]        @relation("StockImportAuthor")
+  pushSubscriptions PushSubscription[]
+}
+
+// Inscrição de notificação push (Web Push) de um dispositivo do usuário —
+// criada quando ele ativa notificações no app instalado. Um usuário pode ter
+// mais de uma (celular + navegador, por exemplo).
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Equipment {

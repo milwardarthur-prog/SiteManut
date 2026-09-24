@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendPushToUser } from "@/lib/push";
 
 // Adiciona um comentário técnico ao histórico da OS.
 // Cada comentário é um registro separado (não sobrescreve os anteriores).
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       data: { content, workOrderId: params?.id, authorId: user?.id },
       include: { author: { select: { id: true, name: true } } },
     });
+
+    // Notifica o técnico responsável, exceto quando o comentário é dele mesmo
+    if (order.technicianId && order.technicianId !== user?.id) {
+      await sendPushToUser(order.technicianId, {
+        title: `Novo comentário na OS #${order.orderNumber}`,
+        body: content,
+        url: `/os/${order.id}`,
+      });
+    }
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error: any) {

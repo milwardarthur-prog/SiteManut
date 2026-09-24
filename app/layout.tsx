@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { ChunkLoadErrorHandler } from '@/components/chunk-load-error-handler'
 import { Providers } from '@/components/providers'
+import { PwaRegister } from '@/components/pwa-register'
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +16,19 @@ export const metadata = {
   metadataBase: new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000'),
   title: 'Manutenção BeltLoc',
   description: 'Sistema de gerenciamento de ordens de serviço de manutenção',
+  manifest: '/manifest.json',
   icons: {
     icon: '/favicon.svg',
     shortcut: '/favicon.svg',
+    apple: '/icons/icon-192.png',
   },
   openGraph: {
     images: ['/og-image.png'],
   },
+}
+
+export const viewport = {
+  themeColor: '#F97316',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
             <Toaster />
             <ChunkLoadErrorHandler />
+            <PwaRegister />
           </Providers>
         </ThemeProvider>
       </body>

@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hasFullAccess } from "@/lib/access";
+import { sendPushToUser } from "@/lib/push";
 
 // Campos específicos de checklist e teste de carga
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
@@ -248,6 +249,16 @@ export async function POST(req: NextRequest) {
       await prisma.equipment.update({
         where: { id: equipmentId },
         data: { currentHorimeter: parseFloat(horimeter) },
+      });
+    }
+
+    // Notifica o técnico designado (exceto quando ele mesmo criou a própria OS)
+    if (assignedTech && assignedTech !== user?.id) {
+      const label = order.equipment?.equipmentNumber ?? customEquipmentLabel;
+      await sendPushToUser(assignedTech, {
+        title: `Nova OS #${order.orderNumber}`,
+        body: label ? `Você foi designado — ${label}` : "Você foi designado pra uma nova OS",
+        url: `/os/${order.id}`,
       });
     }
 

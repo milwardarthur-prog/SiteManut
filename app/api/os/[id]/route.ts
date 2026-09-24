@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendPushToUser } from "@/lib/push";
 
 const CHECKLIST_FIELDS = ["tankSample", "checkFuelFilter1", "checkFuelFilter2", "checkFuelFilter3"] as const;
 const LOADTEST_FIELDS = ["voltageEmpty", "frequencyEmpty", "load", "frequencyLoad"] as const;
@@ -149,6 +150,31 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         equipment: { select: { id: true, equipmentNumber: true, name: true } },
       },
     });
+
+    // Notifica o técnico ao ser designado/reatribuído pra essa OS
+    if (
+      data.technicianId !== undefined &&
+      data.technicianId &&
+      data.technicianId !== current.technicianId &&
+      data.technicianId !== user?.id
+    ) {
+      const label = updated.equipment?.equipmentNumber ?? updated.customEquipmentLabel;
+      await sendPushToUser(data.technicianId, {
+        title: `OS #${updated.orderNumber} atribuída a você`,
+        body: label ? `${label}` : "Você foi designado pra essa OS",
+        url: `/os/${updated.id}`,
+      });
+    }
+
+    // Notifica o técnico responsável quando o gestor escreve novas instruções
+    if (data.adminNotes !== undefined && data.adminNotes && data.adminNotes !== current.adminNotes && current.technicianId) {
+      await sendPushToUser(current.technicianId, {
+        title: `Novas instruções na OS #${updated.orderNumber}`,
+        body: data.adminNotes,
+        url: `/os/${updated.id}`,
+      });
+    }
+
     return NextResponse.json(updated);
   } catch (error: any) {
     return NextResponse.json({ error: error?.message ?? "Erro ao atualizar OS" }, { status: 500 });

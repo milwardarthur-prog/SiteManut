@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Inbox, User, Clock, Loader2, Play, Pause, StopCircle, HandMetal, History, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PushNotificationButton from "@/components/push-notification-button";
 import { toast } from "sonner";
 
 const typeLabels: Record<string, string> = { PREVENTIVA: "Preventiva", CORRETIVA: "Corretiva", RETRABALHO: "Retrabalho" };
@@ -160,6 +161,9 @@ export default function OSTechBoard() {
 
   return (
     <div className="space-y-4">
+      {/* Ativar notificações — some sozinho se já ativado ou sem suporte */}
+      <PushNotificationButton />
+
       {/* Alternância Quadro / Histórico — botões largos, fáceis de tocar no celular */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:w-fit">
         <button
