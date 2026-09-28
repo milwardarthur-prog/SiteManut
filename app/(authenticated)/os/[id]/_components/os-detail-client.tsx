@@ -498,8 +498,8 @@ export default function OSDetailClient({ id }: { id: string }) {
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <InfoCard title="Informações da OS" icon={<FileText className="w-4 h-4" />}>
-          <InfoRow label="Número" value={`#${order?.orderNumber ?? 0}`} />
-          <InfoRow label="Tipo" value={typeLabels[order?.maintenanceType] ?? ""} />
+          {isAdmin && <InfoRow label="Número" value={`#${order?.orderNumber ?? 0}`} />}
+          {isAdmin && <InfoRow label="Tipo" value={typeLabels[order?.maintenanceType] ?? ""} />}
           <InfoRow
             label="Equipamento"
             value={
@@ -510,23 +510,23 @@ export default function OSDetailClient({ id }: { id: string }) {
                 : "-"
             }
           />
-          <InfoRow label="Horímetro" value={order?.horimeter != null ? `${order.horimeter}h` : "-"} />
-          {order?.kmStart != null && order?.kmEnd != null && (
+          {isAdmin && <InfoRow label="Horímetro" value={order?.horimeter != null ? `${order.horimeter}h` : "-"} />}
+          {isAdmin && order?.kmStart != null && order?.kmEnd != null && (
             <InfoRow label="Deslocamento" value={`${computeKmTraveled(order).toLocaleString("pt-BR")} km`} />
           )}
-          <InfoRow label="Criado por" value={order?.createdBy?.name ?? "-"} />
-          <InfoRow label="Abertura" value={order?.createdAt ? new Date(order.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "-"} />
-          {order?.startedAt && <InfoRow label="Início" value={new Date(order.startedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} />}
-          {order?.closedAt && <InfoRow label="Encerramento" value={new Date(order.closedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} />}
-          {order?.totalTimeMinutes != null && (
+          {isAdmin && <InfoRow label="Criado por" value={order?.createdBy?.name ?? "-"} />}
+          {isAdmin && <InfoRow label="Abertura" value={order?.createdAt ? new Date(order.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "-"} />}
+          {isAdmin && order?.startedAt && <InfoRow label="Início" value={new Date(order.startedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} />}
+          {isAdmin && order?.closedAt && <InfoRow label="Encerramento" value={new Date(order.closedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} />}
+          {isAdmin && order?.totalTimeMinutes != null && (
             <InfoRow label="Tempo Total" value={`${Math.floor((order.totalTimeMinutes ?? 0) / 60)}h ${(order.totalTimeMinutes ?? 0) % 60}min`} />
           )}
         </InfoCard>
 
         <InfoCard title="Técnico Responsável" icon={<Users className="w-4 h-4" />}>
           <InfoRow label="Nome" value={order?.technician?.name ?? "Sem técnico"} />
-          <InfoRow label="Email" value={order?.technician?.email ?? "-"} />
-          {order?.closedBy && <InfoRow label="Encerrado por" value={order.closedBy.name} />}
+          {isAdmin && <InfoRow label="Email" value={order?.technician?.email ?? "-"} />}
+          {isAdmin && order?.closedBy && <InfoRow label="Encerrado por" value={order.closedBy.name} />}
         </InfoCard>
       </div>
 
