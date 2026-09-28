@@ -67,6 +67,11 @@ export default function NovaOSClient() {
   const [equipments, setEquipments] = useState<any[]>([]);
 
   const [scope, setScope] = useState("NORMAL");
+  // Técnico quase sempre abre OS Normal (achou um problema); Checklist/Teste
+  // de Carga/Revisão são fluxos estruturados mais raros — ficam escondidos
+  // por padrão pra não sobrecarregar a tela com uma decisão que raramente
+  // se aplica. O gestor sempre vê as 4 opções.
+  const [showAdvancedScope, setShowAdvancedScope] = useState(false);
 
   const [form, setForm] = useState({
     technicianId: "",
@@ -197,33 +202,45 @@ export default function NovaOSClient() {
       <Card className="border-0 shadow-md">
         <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Seletor de escopo */}
-            <div className="space-y-2">
-              <Label>Tipo de OS *</Label>
-              <div className="grid gap-2">
-                {scopeOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setScope(opt.value)}
-                      className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
-                        scope === opt.value
-                          ? "border-orange-500 bg-orange-50"
-                          : "border-gray-200 hover:border-orange-300"
-                      }`}
-                    >
-                      <Icon className={`w-5 h-5 mt-0.5 ${scope === opt.value ? "text-orange-600" : "text-gray-400"}`} />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{opt.label}</p>
-                        <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                      </div>
-                    </button>
-                  );
-                })}
+            {/* Seletor de escopo — gestor sempre vê as 4 opções. Técnico só
+                vê quando pede explicitamente (raramente precisa de outra
+                coisa que não seja OS Normal). */}
+            {(isAdmin || showAdvancedScope) ? (
+              <div className="space-y-2">
+                <Label>Tipo de OS *</Label>
+                <div className="grid gap-2">
+                  {scopeOptions.map((opt) => {
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setScope(opt.value)}
+                        className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
+                          scope === opt.value
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-gray-200 hover:border-orange-300"
+                        }`}
+                      >
+                        <Icon className={`w-5 h-5 mt-0.5 ${scope === opt.value ? "text-orange-600" : "text-gray-400"}`} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{opt.label}</p>
+                          <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAdvancedScope(true)}
+                className="text-xs text-muted-foreground underline underline-offset-2 hover:text-gray-700"
+              >
+                Vou fazer um Checklist, Teste de Carga ou Revisão
+              </button>
+            )}
 
             {/* Equipamento — comum a todos */}
             <div className="space-y-2">
