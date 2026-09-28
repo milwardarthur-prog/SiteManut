@@ -65,6 +65,23 @@ const TABS: { key: string; label: string }[] = [
   { key: "rejeitadas", label: "Rejeitadas/Excluídas" },
 ];
 
+// Agrupa as 9 abas em 3 categorias pra não competir tudo no mesmo nível
+// visual — dentro de "Ativas" (o que realmente precisa de acompanhamento no
+// dia a dia) as sub-abas aparecem como chips secundários.
+const CATEGORIES: { key: string; label: string; tabs: string[] }[] = [
+  {
+    key: "ativas",
+    label: "Ativas",
+    tabs: ["sem_tecnico", "com_tecnico", "pendente", "aprovada", "em_execucao", "pausada", "aguardando"],
+  },
+  { key: "finalizadas", label: "Finalizadas", tabs: ["finalizadas"] },
+  { key: "rejeitadas", label: "Rejeitadas/Excluídas", tabs: ["rejeitadas"] },
+];
+
+function categoryOf(tab: string): string {
+  return CATEGORIES.find((c) => c.tabs.includes(tab))?.key ?? "ativas";
+}
+
 export default function OSListClient() {
   const { data: session } = useSession() || {};
   const router = useRouter();
@@ -186,29 +203,54 @@ export default function OSListClient() {
         </Select>
       </div>
 
-      {/* Tabs por status */}
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-gray-200">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-md transition-colors border-b-2 ${
-              activeTab === t.key
-                ? "border-orange-500 text-orange-600"
-                : "border-transparent text-muted-foreground hover:text-gray-900"
-            }`}
-          >
-            {t.label}
-            {counts[t.key] != null && (
+      {/* Categoria (Ativas / Finalizadas / Rejeitadas) */}
+      <div className="flex gap-2 border-b border-gray-200">
+        {CATEGORIES.map((c) => {
+          const isActiveCategory = categoryOf(activeTab) === c.key;
+          const categoryCount = c.tabs.reduce((sum, key) => sum + (counts[key] ?? 0), 0);
+          return (
+            <button
+              key={c.key}
+              onClick={() => setActiveTab(c.tabs.includes(activeTab) ? activeTab : c.tabs[0])}
+              className={`px-3 py-2 text-sm font-semibold transition-colors border-b-2 ${
+                isActiveCategory
+                  ? "border-orange-500 text-orange-600"
+                  : "border-transparent text-muted-foreground hover:text-gray-900"
+              }`}
+            >
+              {c.label}
               <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === t.key ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+                isActiveCategory ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
               }`}>
-                {counts[t.key]}
+                {categoryCount}
               </span>
-            )}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
+
+      {/* Sub-abas por status — só faz sentido dentro de "Ativas", que reúne
+          várias etapas do fluxo; Finalizadas/Rejeitadas já são um status só. */}
+      {CATEGORIES.find((c) => c.key === categoryOf(activeTab))!.tabs.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mt-2">
+          {TABS.filter((t) => CATEGORIES.find((c) => c.key === categoryOf(activeTab))!.tabs.includes(t.key)).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full transition-colors border ${
+                activeTab === t.key
+                  ? "border-orange-500 bg-orange-50 text-orange-700"
+                  : "border-gray-200 text-muted-foreground hover:text-gray-900 hover:border-gray-300"
+              }`}
+            >
+              {t.label}
+              {counts[t.key] != null && (
+                <span className="ml-1.5 opacity-70">{counts[t.key]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Orders list */}
       {loading ? (
