@@ -43,7 +43,7 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   PENDENTE_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADA: "bg-blue-100 text-blue-800",
-  EM_EXECUCAO: "bg-orange-100 text-orange-800",
+  EM_EXECUCAO: "bg-cyan-100 text-cyan-800",
   PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
   FINALIZADA: "bg-green-100 text-green-800",
@@ -114,7 +114,7 @@ function CostSummaryCard({ order }: { order: any }) {
     <Card className="border-0 shadow-sm bg-gray-50">
       <CardContent className="p-4 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-          <Package className="w-4 h-4 text-orange-500" /> Custo total da OS
+          <Package className="w-4 h-4 text-green-500" /> Custo total da OS
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-gray-900">{fmtPrice(total)}</div>
@@ -369,7 +369,7 @@ export default function OSDetailClient({ id }: { id: string }) {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
+    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-green-500" /></div>;
   }
 
   if (!order) {
@@ -453,7 +453,7 @@ export default function OSDetailClient({ id }: { id: string }) {
             </Button>
           )}
           {canStart && (
-            <Button onClick={() => doAction("start")} disabled={actionLoading} className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={() => doAction("start")} disabled={actionLoading} className="bg-green-500 hover:bg-green-600 text-white">
               <Play className="w-4 h-4 mr-1" /> Iniciar Execução
             </Button>
           )}
@@ -463,7 +463,7 @@ export default function OSDetailClient({ id }: { id: string }) {
             </Button>
           )}
           {canResume && (
-            <Button onClick={() => doAction("resume")} disabled={actionLoading} className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={() => doAction("resume")} disabled={actionLoading} className="bg-green-500 hover:bg-green-600 text-white">
               <Play className="w-4 h-4 mr-1" /> Retomar
             </Button>
           )}
@@ -586,7 +586,7 @@ export default function OSDetailClient({ id }: { id: string }) {
       {!isExecuting && (order?.helpers?.length ?? 0) > 0 && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><UserPlus className="w-4 h-4 text-orange-500" /> Ajudantes</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><UserPlus className="w-4 h-4 text-green-500" /> Ajudantes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -696,7 +696,7 @@ function AdminNotesSection({ orderId, currentNotes, onSaved }: { orderId: string
       </CardHeader>
       <CardContent>
         <Textarea value={notes} onChange={(e: any) => setNotes(e?.target?.value ?? "")} placeholder="Ex: Conferir item X, Trocar item Y..." rows={3} />
-        <Button onClick={save} disabled={saving} size="sm" className="mt-2 bg-orange-500 hover:bg-orange-600 text-white">
+        <Button onClick={save} disabled={saving} size="sm" className="mt-2 bg-green-500 hover:bg-green-600 text-white">
           {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1" />} Salvar
         </Button>
       </CardContent>
@@ -1081,7 +1081,7 @@ function RevisionSection({
                                 ? opt.v === "TROCADO"
                                   ? "bg-green-500 text-white border-green-500"
                                   : "bg-gray-500 text-white border-gray-500"
-                                : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                                : "bg-white text-gray-700 border-gray-300 hover:border-green-400"
                             } ${!canEdit ? "opacity-60 cursor-not-allowed" : ""}`}
                           >
                             {opt.l}
@@ -1161,8 +1161,8 @@ function OptionGroup({ label, value, onChange, options, disabled }: {
             onClick={() => onChange(o.v)}
             className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
               value === o.v
-                ? "bg-orange-500 border-orange-500 text-white"
-                : "bg-white border-gray-300 text-gray-700 hover:border-orange-400"
+                ? "bg-green-500 border-green-500 text-white"
+                : "bg-white border-gray-300 text-gray-700 hover:border-green-400"
             } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
           >
             {o.l}
@@ -1251,7 +1251,7 @@ function CommentsSection({ orderId, comments, legacyComments, canEdit, onSaved }
         {canEdit && (
           <div className="space-y-2">
             <Textarea value={text} onChange={(e: any) => setText(e?.target?.value ?? "")} placeholder="Adicione um novo comentário..." rows={3} />
-            <Button onClick={add} disabled={saving} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={add} disabled={saving} size="sm" className="bg-green-500 hover:bg-green-600 text-white">
               {saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Send className="w-3 h-3 mr-1" />} Adicionar Comentário
             </Button>
           </div>
@@ -1366,7 +1366,7 @@ function PartsSection({
                 ))}
               </datalist>
               <Input type="number" min="1" value={qty} onChange={(e: any) => setQty(e?.target?.value ?? "1")} className="w-20" />
-              <Button onClick={addPart} disabled={adding} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
+              <Button onClick={addPart} disabled={adding} size="sm" className="bg-green-500 hover:bg-green-600 text-white">
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -1427,12 +1427,12 @@ function HelpersSection({ orderId, helpers, technicians, currentTechId, onSaved 
   };
 
   return (
-    <Card className="border-2 border-orange-200 shadow-md bg-orange-50/30">
+    <Card className="border-2 border-green-200 shadow-md bg-green-50/30">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2 text-orange-700">
+        <CardTitle className="text-base flex items-center gap-2 text-green-700">
           <UserPlus className="w-5 h-5" /> Inserir Ajudante
         </CardTitle>
-        <p className="text-xs text-orange-600">Adicione técnicos que estão auxiliando nesta OS</p>
+        <p className="text-xs text-green-600">Adicione técnicos que estão auxiliando nesta OS</p>
       </CardHeader>
       <CardContent>
         {(helpers?.length ?? 0) > 0 && (
@@ -1471,7 +1471,7 @@ function HelpersSection({ orderId, helpers, technicians, currentTechId, onSaved 
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={addHelper} disabled={adding} className="bg-orange-500 hover:bg-orange-600 text-white">
+          <Button onClick={addHelper} disabled={adding} className="bg-green-500 hover:bg-green-600 text-white">
             <UserPlus className="w-4 h-4 mr-1" /> Adicionar
           </Button>
         </div>

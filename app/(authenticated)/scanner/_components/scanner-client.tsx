@@ -43,7 +43,7 @@ export default function ScannerClient() {
           {showScanner ? (
             <QrReader onResult={(code: string) => { setShowScanner(false); lookupCode(code); }} />
           ) : (
-            <Button onClick={() => setShowScanner(true)} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={() => setShowScanner(true)} className="w-full bg-green-500 hover:bg-green-600 text-white">
               <ScanLine className="w-4 h-4 mr-2" /> Abrir Câmera
             </Button>
           )}
@@ -55,7 +55,7 @@ export default function ScannerClient() {
         <CardContent>
           <div className="flex gap-2">
             <Input placeholder="Código do QR (ex: BELTLOC-EQ001-...)" value={manualCode} onChange={(e: any) => setManualCode(e?.target?.value ?? "")} />
-            <Button onClick={() => lookupCode(manualCode)} disabled={loading} className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={() => lookupCode(manualCode)} disabled={loading} className="bg-green-500 hover:bg-green-600 text-white">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             </Button>
           </div>

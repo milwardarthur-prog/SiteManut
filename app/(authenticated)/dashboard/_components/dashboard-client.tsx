@@ -13,7 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import dynamic from "next/dynamic";
 
-const DashboardCharts = dynamic(() => import("./dashboard-charts"), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div> });
+const DashboardCharts = dynamic(() => import("./dashboard-charts"), { ssr: false, loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div> });
 
 export default function DashboardClient() {
   const { data: session, status } = useSession() || {};
@@ -44,7 +44,7 @@ export default function DashboardClient() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
       </div>
     );
   }
@@ -63,7 +63,7 @@ export default function DashboardClient() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total de OS" value={stats?.totalOrders ?? 0} icon={<ClipboardList className="w-5 h-5" />} color="bg-blue-500" />
         <StatCard title="Pendentes" value={pendentes + aguardando} icon={<AlertTriangle className="w-5 h-5" />} color="bg-amber-500" />
-        <StatCard title="Em Execução" value={emExecucao} icon={<Clock className="w-5 h-5" />} color="bg-orange-500" />
+        <StatCard title="Em Execução" value={emExecucao} icon={<Clock className="w-5 h-5" />} color="bg-green-500" />
         <StatCard title="Finalizadas" value={finalizadas} icon={<CheckCircle2 className="w-5 h-5" />} color="bg-green-500" />
       </div>
       {stats && <DashboardCharts stats={stats} />}

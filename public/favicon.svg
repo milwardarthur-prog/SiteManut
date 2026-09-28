@@ -6,7 +6,7 @@
   </defs>
   <g clip-path="url(#gear)">
     <rect width="256" height="256" fill="#1F2937"/>
-    <circle cx="128" cy="128" r="85" fill="#F97316"/>
+    <circle cx="128" cy="128" r="85" fill="#22C55E"/>
     <text x="128" y="185" font-family="Arial, sans-serif" font-size="140" font-weight="bold" fill="#1F2937" text-anchor="middle">B</text>
   </g>
 </svg>

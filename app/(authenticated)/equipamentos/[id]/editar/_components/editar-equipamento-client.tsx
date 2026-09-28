@@ -37,7 +37,7 @@ export default function EditarEquipamentoClient({ id }: { id: string }) {
   }, [id, isAdmin, status]);
 
   if (status === "loading" || loading) {
-    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
+    return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-green-500" /></div>;
   }
 
   if (!isAdmin) {
@@ -46,7 +46,7 @@ export default function EditarEquipamentoClient({ id }: { id: string }) {
         <ShieldAlert className="w-12 h-12 text-red-500 mx-auto" />
         <h2 className="text-lg font-semibold text-gray-900">Acesso restrito</h2>
         <p className="text-sm text-muted-foreground">Apenas gestores (Admin) podem editar equipamentos.</p>
-        <button onClick={() => router.replace(`/equipamentos/${id}`)} className="text-sm text-orange-600 underline">
+        <button onClick={() => router.replace(`/equipamentos/${id}`)} className="text-sm text-green-600 underline">
           Voltar ao equipamento
         </button>
       </div>

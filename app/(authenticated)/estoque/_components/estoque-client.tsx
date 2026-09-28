@@ -146,7 +146,7 @@ export default function EstoqueClient() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <Package className="w-5 h-5 text-orange-500" /> Estoque
+          <Package className="w-5 h-5 text-green-500" /> Estoque
         </h1>
         <p className="text-sm text-gray-500 mt-0.5">
           Lista de itens (nome e preço), atualizada via importação de CSV.
@@ -229,7 +229,7 @@ export default function EstoqueClient() {
               <Button variant="outline" onClick={cancelPreview}>
                 Cancelar
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600" onClick={confirm} disabled={!canConfirm || loading}>
+              <Button className="bg-green-500 hover:bg-green-600" onClick={confirm} disabled={!canConfirm || loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar atualização"}
               </Button>
             </div>

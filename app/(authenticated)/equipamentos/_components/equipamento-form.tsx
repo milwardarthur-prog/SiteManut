@@ -152,7 +152,7 @@ export default function EquipamentoForm({ equipmentId, initialData }: Equipament
           </Card>
         ))}
 
-        <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={loading}>
+        <Button type="submit" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
           {loading ? (isEdit ? "Salvando..." : "Criando...") : (isEdit ? "Salvar Alterações" : "Criar Equipamento")}
         </Button>

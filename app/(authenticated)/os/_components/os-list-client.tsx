@@ -26,7 +26,7 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   PENDENTE_APROVACAO: "bg-amber-100 text-amber-800",
   APROVADA: "bg-blue-100 text-blue-800",
-  EM_EXECUCAO: "bg-orange-100 text-orange-800",
+  EM_EXECUCAO: "bg-cyan-100 text-cyan-800",
   PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
   FINALIZADA: "bg-green-100 text-green-800",
@@ -166,7 +166,7 @@ export default function OSListClient() {
           </p>
         </div>
         <Link href="/os/nova">
-          <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+          <Button className="bg-green-500 hover:bg-green-600 text-white">
             <Plus className="w-4 h-4 mr-2" /> Nova OS
           </Button>
         </Link>
@@ -215,13 +215,13 @@ export default function OSListClient() {
               onClick={() => setActiveTab(c.tabs.includes(activeTab) ? activeTab : c.tabs[0])}
               className={`px-3 py-2 text-sm font-semibold transition-colors border-b-2 ${
                 isActiveCategory
-                  ? "border-orange-500 text-orange-600"
+                  ? "border-green-500 text-green-600"
                   : "border-transparent text-muted-foreground hover:text-gray-900"
               }`}
             >
               {c.label}
               <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                isActiveCategory ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600"
+                isActiveCategory ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
               }`}>
                 {categoryCount}
               </span>
@@ -240,7 +240,7 @@ export default function OSListClient() {
               onClick={() => setActiveTab(t.key)}
               className={`whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-full transition-colors border ${
                 activeTab === t.key
-                  ? "border-orange-500 bg-orange-50 text-orange-700"
+                  ? "border-green-500 bg-green-50 text-green-700"
                   : "border-gray-200 text-muted-foreground hover:text-gray-900 hover:border-gray-300"
               }`}
             >
@@ -256,7 +256,7 @@ export default function OSListClient() {
       {/* Orders list */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-green-500" />
         </div>
       ) : (orders?.length ?? 0) === 0 ? (
         <Card className="border-0 shadow-md">
@@ -276,8 +276,8 @@ export default function OSListClient() {
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <span className="font-mono text-sm font-bold text-orange-600">#{order?.orderNumber ?? 0}</span>
+                    <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <span className="font-mono text-sm font-bold text-green-600">#{order?.orderNumber ?? 0}</span>
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

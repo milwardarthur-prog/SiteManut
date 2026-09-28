@@ -136,7 +136,7 @@ export default function ImprimirClient() {
   if (status === "loading" || loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
       </div>
     );
   }
@@ -164,7 +164,7 @@ export default function ImprimirClient() {
     <div className="p-4 print:p-0">
       {/* Botão fica oculto na impressão */}
       <div className="flex justify-end mb-4 print:hidden">
-        <Button onClick={() => window.print()} className="gap-2 bg-orange-500 hover:bg-orange-600">
+        <Button onClick={() => window.print()} className="gap-2 bg-green-500 hover:bg-green-600">
           <Printer className="w-4 h-4" /> Imprimir
         </Button>
       </div>

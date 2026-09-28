@@ -291,7 +291,7 @@ export default function HorimetrosClient() {
   if (status === "loading" || (loading && rows.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
       </div>
     );
   }
@@ -311,14 +311,14 @@ export default function HorimetrosClient() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            <Gauge className="w-6 h-6 text-orange-500" /> Controle de Horímetros
+            <Gauge className="w-6 h-6 text-green-500" /> Controle de Horímetros
           </h1>
           <p className="text-sm text-gray-500">
             Leituras, pendências, localização e previsão de manutenção — tudo em um só lugar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setLancarOpen(true)} className="gap-2 bg-orange-500 hover:bg-orange-600">
+          <Button onClick={() => setLancarOpen(true)} className="gap-2 bg-green-500 hover:bg-green-600">
             <Save className="w-4 h-4" /> Lançar Leituras
           </Button>
           <Button onClick={() => setLocalizacaoOpen(true)} variant="outline" className="gap-2">
@@ -350,7 +350,7 @@ export default function HorimetrosClient() {
             onClick={() => setFSituacao("atrasados")}
           />
           <SummaryCard
-            label="Agendar Manutenção" value={summary.agendarManutencao} icon={<Wrench className="w-4 h-4" />} color="text-orange-700"
+            label="Agendar Manutenção" value={summary.agendarManutencao} icon={<Wrench className="w-4 h-4" />} color="text-green-700"
             active={fSituacao === "agendar_manutencao"}
             onClick={() => setFSituacao("agendar_manutencao")}
           />
@@ -478,7 +478,7 @@ export default function HorimetrosClient() {
         <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <Save className="w-5 h-5 text-orange-500" /> Lançar Leituras
+              <Save className="w-5 h-5 text-green-500" /> Lançar Leituras
             </SheetTitle>
             <SheetDescription>Registre a leitura de horímetro de um ou mais equipamentos.</SheetDescription>
           </SheetHeader>
@@ -493,7 +493,7 @@ export default function HorimetrosClient() {
         <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-orange-500" /> Localização (CSV)
+              <MapPin className="w-5 h-5 text-green-500" /> Localização (CSV)
             </SheetTitle>
             <SheetDescription>Atualize em lote qual cliente está com cada equipamento locado.</SheetDescription>
           </SheetHeader>
@@ -508,7 +508,7 @@ export default function HorimetrosClient() {
         <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <MapPinPlus className="w-5 h-5 text-orange-500" /> Locação Manual
+              <MapPinPlus className="w-5 h-5 text-green-500" /> Locação Manual
             </SheetTitle>
             <SheetDescription>
               Marque equipamentos locados sem contrato ativo — eles não aparecem no relatório de
@@ -581,7 +581,7 @@ function DetailDialog({
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Gauge className="w-5 h-5 text-orange-500" /> {row.equipmentNumber}
+            <Gauge className="w-5 h-5 text-green-500" /> {row.equipmentNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm">
@@ -633,7 +633,7 @@ function DetailDialog({
           <DeleteEquipmentButton row={row} onDeleted={onDeleted} />
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Fechar</Button>
-            <Button className="bg-orange-500 hover:bg-orange-600 gap-2" onClick={() => onAjustar(row)}>
+            <Button className="bg-green-500 hover:bg-green-600 gap-2" onClick={() => onAjustar(row)}>
               <Settings2 className="w-4 h-4" /> Ajustar
             </Button>
           </div>
@@ -704,7 +704,7 @@ function EquipmentCommentsSection({ equipmentId }: { equipmentId: string }) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !saving) submit(); }}
         />
-        <Button size="sm" className="bg-orange-500 hover:bg-orange-600 shrink-0" onClick={submit} disabled={saving || !text.trim()}>
+        <Button size="sm" className="bg-green-500 hover:bg-green-600 shrink-0" onClick={submit} disabled={saving || !text.trim()}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Adicionar"}
         </Button>
       </div>
@@ -844,7 +844,7 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          className="font-medium text-gray-900 hover:text-orange-600 hover:underline underline-offset-2"
+          className="font-medium text-gray-900 hover:text-green-600 hover:underline underline-offset-2"
         >
           {fmtNum(row.currentHorimeter)}
         </button>
@@ -878,7 +878,7 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar mesmo assim"}
               </Button>
             ) : (
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600" disabled={saving || value === ""} onClick={() => submit(false)}>
+              <Button size="sm" className="bg-green-500 hover:bg-green-600" disabled={saving || value === ""} onClick={() => submit(false)}>
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Salvar"}
               </Button>
             )}
@@ -915,7 +915,7 @@ function SummaryCard({
           onClick();
         }
       }}
-      className={onClick ? `cursor-pointer transition-colors hover:border-orange-300 hover:bg-orange-50/40 ${active ? "border-orange-400 ring-1 ring-orange-300 bg-orange-50/60" : ""}` : ""}
+      className={onClick ? `cursor-pointer transition-colors hover:border-green-300 hover:bg-green-50/40 ${active ? "border-green-400 ring-1 ring-green-300 bg-green-50/60" : ""}` : ""}
     >
       <CardContent className="p-3">
         <div className={`flex items-center gap-1.5 text-xs font-medium ${color}`}>
@@ -1007,7 +1007,7 @@ function LancarPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
           <label className="block text-xs font-medium text-gray-600 mb-1">Buscar equipamento</label>
           <Input placeholder="GE-... ou cliente" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Button onClick={() => submit(false)} disabled={saving || countFilled === 0} className="gap-2 bg-orange-500 hover:bg-orange-600">
+        <Button onClick={() => submit(false)} disabled={saving || countFilled === 0} className="gap-2 bg-green-500 hover:bg-green-600">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Lançar {countFilled > 0 ? `(${countFilled})` : ""}
         </Button>
@@ -1143,7 +1143,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Settings2 className="w-5 h-5 text-orange-500" /> Ajustar {row.equipmentNumber}
+            <Settings2 className="w-5 h-5 text-green-500" /> Ajustar {row.equipmentNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm">
@@ -1205,7 +1205,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button className="bg-orange-500 hover:bg-orange-600" onClick={save} disabled={saving}>
+          <Button className="bg-green-500 hover:bg-green-600" onClick={save} disabled={saving}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
           </Button>
         </DialogFooter>
@@ -1328,7 +1328,7 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
                   <Td>
                     <Button
                       size="sm"
-                      className="bg-orange-500 hover:bg-orange-600 gap-1"
+                      className="bg-green-500 hover:bg-green-600 gap-1"
                       disabled={savingId === r.id || !(clientDrafts[r.id] ?? "").trim()}
                       onClick={() => save(r, clientDrafts[r.id] ?? "")}
                     >
@@ -1780,7 +1780,7 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
               <Button variant="outline" onClick={() => { setPreview(null); setCsv(""); setFileName(""); if (fileRef.current) fileRef.current.value = ""; }}>
                 Cancelar
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600" onClick={confirm} disabled={!canConfirm || loading}>
+              <Button className="bg-green-500 hover:bg-green-600" onClick={confirm} disabled={!canConfirm || loading}>
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar atualização"}
               </Button>
             </div>

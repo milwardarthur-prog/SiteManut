@@ -106,7 +106,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
             href={isAdmin ? (fullAccess ? "/dashboard" : "/horimetros") : "/os"}
             className="flex items-center gap-3 overflow-hidden"
           >
-            <div className="w-9 h-9 shrink-0 bg-orange-500 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 shrink-0 bg-green-500 rounded-lg flex items-center justify-center">
               <Settings className="w-5 h-5 text-white" />
             </div>
             <span
@@ -143,7 +143,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
                   collapsed ? "lg:justify-center lg:px-0" : ""
                 } ${
                   isActive
-                    ? "bg-orange-500/20 text-orange-400"
+                    ? "bg-green-500/20 text-green-400"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
               >
@@ -168,7 +168,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
               collapsed ? "lg:justify-center" : ""
             }`}
           >
-            <div className="w-8 h-8 shrink-0 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 text-xs font-bold">
+            <div className="w-8 h-8 shrink-0 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-xs font-bold">
               {user?.name?.charAt?.(0)?.toUpperCase?.() ?? "U"}
             </div>
             <div className={`flex-1 min-w-0 ${collapsed ? "lg:hidden" : ""}`}>
@@ -207,7 +207,7 @@ export default function AppSidebar({ children }: { children: React.ReactNode }) 
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-orange-500 rounded-lg flex items-center justify-center">
+            <div className="w-7 h-7 bg-green-500 rounded-lg flex items-center justify-center">
               <Settings className="w-4 h-4 text-white" />
             </div>
             <span className="font-display font-bold text-sm">BeltLoc</span>

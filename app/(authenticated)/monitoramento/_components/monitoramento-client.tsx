@@ -29,7 +29,7 @@ const statusLabels: Record<string, string> = {
 };
 const statusColors: Record<string, string> = {
   APROVADA: "bg-gray-100 text-gray-700",
-  EM_EXECUCAO: "bg-green-100 text-green-800",
+  EM_EXECUCAO: "bg-cyan-100 text-cyan-800",
   PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
 };
@@ -156,7 +156,7 @@ export default function MonitoramentoClient() {
   if (sessionStatus === "loading" || (loading && orders.length === 0 && technicians.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
       </div>
     );
   }
@@ -179,7 +179,7 @@ export default function MonitoramentoClient() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            <Kanban className="w-6 h-6 text-orange-500" /> Monitoramento
+            <Kanban className="w-6 h-6 text-green-500" /> Monitoramento
           </h1>
           <p className="text-sm text-muted-foreground">
             Arraste um card do Backlog para a coluna de um técnico para atribuir a atividade a ele. Atualiza a cada 30s.
@@ -187,7 +187,7 @@ export default function MonitoramentoClient() {
         </div>
         {isAdmin && (
           <Link href="/os/nova">
-            <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button className="bg-green-500 hover:bg-green-600 text-white">
               <Plus className="w-4 h-4 mr-2" /> Nova OS
             </Button>
           </Link>
@@ -204,7 +204,7 @@ export default function MonitoramentoClient() {
           onDragLeave={() => setDragOverKey((k) => (k === "backlog" ? null : k))}
           onDrop={(e) => onColumnDrop(e, null)}
           className={`rounded-xl border-2 p-3 min-h-[92px] transition-colors ${
-            dragOverKey === "backlog" ? "border-orange-400 bg-orange-50" : "border-dashed border-gray-300 bg-gray-50/60"
+            dragOverKey === "backlog" ? "border-green-400 bg-green-50" : "border-dashed border-gray-300 bg-gray-50/60"
           }`}
         >
           {backlog.length === 0 ? (
@@ -235,7 +235,7 @@ export default function MonitoramentoClient() {
                 onDragLeave={() => setDragOverKey((k) => (k === key ? null : k))}
                 onDrop={(e) => onColumnDrop(e, t.id)}
                 className={`shrink-0 w-64 rounded-xl border-2 p-3 space-y-2 min-h-[160px] transition-colors ${
-                  dragOverKey === key ? "border-orange-400 bg-orange-50" : "border-gray-200 bg-white"
+                  dragOverKey === key ? "border-green-400 bg-green-50" : "border-gray-200 bg-white"
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -272,7 +272,7 @@ export default function MonitoramentoClient() {
           </DialogHeader>
           {summaryLoading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-green-500" />
             </div>
           ) : summary ? (
             <div className="space-y-4">
@@ -318,7 +318,7 @@ export default function MonitoramentoClient() {
 
               <Link
                 href={`/os/${summary.id}`}
-                className="text-sm text-orange-600 hover:underline inline-block pt-1"
+                className="text-sm text-green-600 hover:underline inline-block pt-1"
               >
                 Ver OS completa →
               </Link>

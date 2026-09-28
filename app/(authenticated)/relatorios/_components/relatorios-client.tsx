@@ -12,7 +12,7 @@ import dynamic from "next/dynamic";
 
 const DashboardCharts = dynamic(
   () => import("../../dashboard/_components/dashboard-charts"),
-  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div> }
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div> }
 );
 
 export default function RelatoriosClient() {
@@ -84,7 +84,7 @@ export default function RelatoriosClient() {
               <Label className="text-xs">Data Final</Label>
               <Input type="date" value={endDate} onChange={(e: any) => setEndDate(e?.target?.value ?? "")} />
             </div>
-            <Button onClick={fetchStats} disabled={loading} className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button onClick={fetchStats} disabled={loading} className="bg-green-500 hover:bg-green-600 text-white">
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <BarChart3 className="w-4 h-4 mr-1" />}
               Gerar Relatório
             </Button>

@@ -68,7 +68,7 @@ export default function EquipDetailClient({ id }: { id: string }) {
     } catch { toast.error("Erro ao baixar"); }
   };
 
-  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-green-500" /></div>;
   if (!equip) return <div className="text-center py-12 text-muted-foreground">Equipamento não encontrado</div>;
 
   return (

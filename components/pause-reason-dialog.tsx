@@ -85,7 +85,7 @@ export default function PauseReasonDialog({
           <Button
             onClick={() => onConfirm(reason, note.trim())}
             disabled={!canConfirm || loading}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-green-500 hover:bg-green-600 text-white"
           >
             {loading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null} Pausar
           </Button>

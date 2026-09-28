@@ -43,7 +43,7 @@ export default function EquipamentosClient() {
         </div>
         {isAdmin && (
           <Link href="/equipamentos/novo">
-            <Button className="bg-orange-500 hover:bg-orange-600 text-white">
+            <Button className="bg-green-500 hover:bg-green-600 text-white">
               <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
             </Button>
           </Link>
@@ -64,7 +64,7 @@ export default function EquipamentosClient() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
+        <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-green-500" /></div>
       ) : (equipments?.length ?? 0) === 0 ? (
         <Card className="border-0 shadow-md">
           <CardContent className="py-12 text-center">
@@ -83,8 +83,8 @@ export default function EquipamentosClient() {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
-                      <Wrench className="w-5 h-5 text-orange-600" />
+                    <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                      <Wrench className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
                       <p className="font-medium text-sm">{eq?.name ?? ""}</p>

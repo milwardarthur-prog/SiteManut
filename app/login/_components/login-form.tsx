@@ -42,11 +42,11 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-gray-50">
       <div className="w-full max-w-md mx-4">
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-orange-500 rounded-xl flex items-center justify-center mb-4 shadow-md">
+            <div className="w-16 h-16 bg-green-500 rounded-xl flex items-center justify-center mb-4 shadow-md">
               <Settings className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-display font-bold tracking-tight text-gray-900">
@@ -91,7 +91,7 @@ export default function LoginForm() {
             </div>
             <Button
               type="submit"
-              className="w-full h-11 bg-orange-500 hover:bg-orange-600 text-white"
+              className="w-full h-11 bg-green-500 hover:bg-green-600 text-white"
               disabled={loading}
             >
               {loading ? "Entrando..." : "Entrar"}

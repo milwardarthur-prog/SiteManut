@@ -30,7 +30,7 @@ const statusLabels: Record<string, string> = {
 };
 const statusColors: Record<string, string> = {
   APROVADA: "bg-gray-100 text-gray-700",
-  EM_EXECUCAO: "bg-green-100 text-green-800",
+  EM_EXECUCAO: "bg-cyan-100 text-cyan-800",
   PAUSADA: "bg-yellow-100 text-yellow-800",
   AGUARDANDO_ENCERRAMENTO: "bg-purple-100 text-purple-800",
   FINALIZADA: "bg-green-100 text-green-800",
@@ -163,7 +163,7 @@ export default function OSTechBoard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-green-500" />
       </div>
     );
   }
@@ -230,7 +230,7 @@ export default function OSTechBoard() {
       ) : (
         <div className="space-y-2">
           {historyLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-green-500" /></div>
           ) : history.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">Nenhuma OS finalizada ou rejeitada ainda.</p>
           ) : (
@@ -282,7 +282,7 @@ function MineActions({
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   if (order.status === "APROVADA") {
     return (
-      <Button className="w-full h-11 text-sm gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" disabled={busy}
+      <Button className="w-full h-11 text-sm gap-1.5 bg-green-500 hover:bg-green-600 text-white" disabled={busy}
         onClick={(e) => { stop(e); onAction(order.id, "start", `#${order.orderNumber} iniciada!`); }}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Iniciar
       </Button>
@@ -304,7 +304,7 @@ function MineActions({
   }
   if (order.status === "PAUSADA") {
     return (
-      <Button className="w-full h-11 text-sm gap-1.5 bg-orange-500 hover:bg-orange-600 text-white" disabled={busy}
+      <Button className="w-full h-11 text-sm gap-1.5 bg-green-500 hover:bg-green-600 text-white" disabled={busy}
         onClick={(e) => { stop(e); onAction(order.id, "resume", `#${order.orderNumber} retomada!`); }}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Retomar
       </Button>

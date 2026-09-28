@@ -46,8 +46,8 @@ function OptionGroup({ label, value, options, onChange }: {
             onClick={() => onChange(value === opt.value ? "" : opt.value)}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
               value === opt.value
-                ? "bg-orange-500 text-white border-orange-500"
-                : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                ? "bg-green-500 text-white border-green-500"
+                : "bg-white text-gray-700 border-gray-300 hover:border-green-400"
             }`}
           >
             {opt.label}
@@ -218,11 +218,11 @@ export default function NovaOSClient() {
                         onClick={() => setScope(opt.value)}
                         className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
                           scope === opt.value
-                            ? "border-orange-500 bg-orange-50"
-                            : "border-gray-200 hover:border-orange-300"
+                            ? "border-green-500 bg-green-50"
+                            : "border-gray-200 hover:border-green-300"
                         }`}
                       >
-                        <Icon className={`w-5 h-5 mt-0.5 ${scope === opt.value ? "text-orange-600" : "text-gray-400"}`} />
+                        <Icon className={`w-5 h-5 mt-0.5 ${scope === opt.value ? "text-green-600" : "text-gray-400"}`} />
                         <div>
                           <p className="text-sm font-medium text-gray-900">{opt.label}</p>
                           <p className="text-xs text-muted-foreground">{opt.desc}</p>
@@ -252,8 +252,8 @@ export default function NovaOSClient() {
                     onClick={() => setSemPatrimonio((v) => !v)}
                     className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
                       semPatrimonio
-                        ? "bg-orange-500 text-white border-orange-500"
-                        : "bg-white text-gray-600 border-gray-300 hover:border-orange-400"
+                        ? "bg-green-500 text-white border-green-500"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-green-400"
                     }`}
                   >
                     Ainda sem patrimônio (em fabricação)
@@ -473,7 +473,7 @@ export default function NovaOSClient() {
                                       ? opt.v === "TROCADO"
                                         ? "bg-green-500 text-white border-green-500"
                                         : "bg-gray-500 text-white border-gray-500"
-                                      : "bg-white text-gray-700 border-gray-300 hover:border-orange-400"
+                                      : "bg-white text-gray-700 border-gray-300 hover:border-green-400"
                                   }`}
                                 >
                                   {opt.l}
@@ -500,7 +500,7 @@ export default function NovaOSClient() {
               />
             </div>
 
-            <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={loading}>
+            <Button type="submit" className="w-full bg-green-500 hover:bg-green-600 text-white" disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               {loading ? "Criando..." : "Criar OS"}
             </Button>
