@@ -129,7 +129,7 @@ function CostSummaryCard({ order }: { order: any }) {
 
 // Deslocamento (KM inicial/final) — vale pra qualquer escopo de OS. Fica em
 // branco quando o serviço é feito no pátio (sem custo de combustível).
-function TravelSection({ order, canEdit, onSaved }: { order: any; canEdit: boolean; onSaved: () => void }) {
+function TravelSection({ order, canEdit, showCost, onSaved }: { order: any; canEdit: boolean; showCost: boolean; onSaved: () => void }) {
   const [kmStart, setKmStart] = useState<string>(order?.kmStart != null ? String(order.kmStart) : "");
   const [kmEnd, setKmEnd] = useState<string>(order?.kmEnd != null ? String(order.kmEnd) : "");
   const [saving, setSaving] = useState(false);
@@ -175,7 +175,9 @@ function TravelSection({ order, canEdit, onSaved }: { order: any; canEdit: boole
           <p className={`text-sm font-medium ${traveled < 0 ? "text-red-600" : "text-gray-700"}`}>
             {traveled < 0
               ? "KM final não pode ser menor que o inicial."
-              : `${traveled.toLocaleString("pt-BR")} km percorridos — ${fmtPrice(cost)} de combustível`}
+              : showCost
+              ? `${traveled.toLocaleString("pt-BR")} km percorridos — ${fmtPrice(cost)} de combustível`
+              : `${traveled.toLocaleString("pt-BR")} km percorridos`}
           </p>
         )}
         {canEdit && (
@@ -528,12 +530,12 @@ export default function OSDetailClient({ id }: { id: string }) {
         </InfoCard>
       </div>
 
-      {/* Custo total da OS (peças + revisão, quando houver) */}
-      <CostSummaryCard order={order} />
+      {/* Custo total da OS (peças + revisão, quando houver) — só o gestor vê */}
+      {isAdmin && <CostSummaryCard order={order} />}
 
       {/* Deslocamento (KM) — vale pra qualquer escopo de OS; fica em branco
           quando o serviço é feito no pátio */}
-      <TravelSection order={order} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
+      <TravelSection order={order} canEdit={canEdit || isAdmin} showCost={isAdmin} onSaved={fetchOrder} />
 
       {/* Admin notes */}
       {isAdmin && (
@@ -565,7 +567,7 @@ export default function OSDetailClient({ id }: { id: string }) {
 
       {/* Revisão */}
       {order?.scope === "REVISAO" && (
-        <RevisionSection order={order} canEdit={canEdit || isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
+        <RevisionSection order={order} canEdit={canEdit || isAdmin} showCost={isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
       )}
 
       {/* Pausas (histórico de motivo + duração) */}
@@ -575,7 +577,7 @@ export default function OSDetailClient({ id }: { id: string }) {
       <CommentsSection orderId={id} comments={order?.technicalComments ?? []} legacyComments={order?.comments ?? ""} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
 
       {/* Parts */}
-      <PartsSection orderId={id} parts={order?.parts ?? []} canEdit={canEdit} stockItems={stockItems} onSaved={fetchOrder} />
+      <PartsSection orderId={id} parts={order?.parts ?? []} canEdit={canEdit} showCost={isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
 
       {/* Helpers - VITAL section */}
       {isExecuting && (
@@ -602,8 +604,8 @@ export default function OSDetailClient({ id }: { id: string }) {
         </Card>
       )}
 
-      {/* Photos */}
-      <PhotosSection orderId={id} photos={order?.photos ?? []} canUpload={canTechClose || isExecuting} onSaved={fetchOrder} />
+      {/* Fotos removidas por enquanto (pedido do gestor) — PhotosSection
+          continua no arquivo, só não é renderizada. */}
 
       <PauseReasonDialog open={showPauseDialog} onOpenChange={setShowPauseDialog} onConfirm={confirmPause} loading={actionLoading} />
     </div>
@@ -930,11 +932,13 @@ function guessStockItem(
 function RevisionSection({
   order,
   canEdit,
+  showCost,
   stockItems,
   onSaved,
 }: {
   order: any;
   canEdit: boolean;
+  showCost: boolean;
   stockItems: { id: string; name: string; price: number }[];
   onSaved: () => void;
 }) {
@@ -1037,7 +1041,7 @@ function RevisionSection({
           <div>
             <Label className="text-xs">Óleo 15W40 (litros)</Label>
             <Input type="number" step="0.1" value={oilLiters} onChange={(e: any) => setOilLiters(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" placeholder="Ex: 12.5" />
-            {oilStockItem ? (
+            {showCost && (oilStockItem ? (
               <p className="text-xs text-muted-foreground mt-1">
                 {fmtPrice(oilStockItem.price)}/L × {oilLitersNum || 0}L = <strong>{fmtPrice(oilCost)}</strong>
               </p>
@@ -1045,7 +1049,7 @@ function RevisionSection({
               <p className="text-xs text-amber-600 mt-1">
                 "{OIL_PRODUCT_NAME}" não encontrado no Estoque — não entra no custo.
               </p>
-            )}
+            ))}
           </div>
         </div>
 
@@ -1085,7 +1089,9 @@ function RevisionSection({
                         ))}
                       </div>
                     </div>
-                    {state === "TROCADO" && (
+                    {/* Item do Estoque (pra custo) — o sistema já sugere um
+                        pelo código do filtro; só o gestor precisa ajustar. */}
+                    {state === "TROCADO" && showCost && (
                       <div>
                         <Input
                           list="stock-items-datalist-revisao"
@@ -1116,11 +1122,13 @@ function RevisionSection({
           </datalist>
         </div>
 
-        <div className="flex items-center justify-between px-1 pt-2 border-t text-sm font-medium">
-          <span>Custo da revisão (filtros + óleo)</span>
-          <span>{fmtPrice(revisionCost)}</span>
-        </div>
-        {hasUnpricedFilter && (
+        {showCost && (
+          <div className="flex items-center justify-between px-1 pt-2 border-t text-sm font-medium">
+            <span>Custo da revisão (filtros + óleo)</span>
+            <span>{fmtPrice(revisionCost)}</span>
+          </div>
+        )}
+        {showCost && hasUnpricedFilter && (
           <p className="text-xs text-amber-600 px-1">
             Filtros marcados como trocados sem item do Estoque selecionado não entram nesse total.
           </p>
@@ -1258,12 +1266,14 @@ function PartsSection({
   orderId,
   parts,
   canEdit,
+  showCost,
   stockItems,
   onSaved,
 }: {
   orderId: string;
   parts: any[];
   canEdit: boolean;
+  showCost: boolean;
   stockItems: { id: string; name: string; price: number }[];
   onSaved: () => void;
 }) {
@@ -1314,9 +1324,11 @@ function PartsSection({
                   {p?.description} <span className="text-muted-foreground">(x{p?.quantity ?? 1})</span>
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    {p?.unitPrice != null ? fmtPrice(p.unitPrice * (p?.quantity ?? 1)) : "Sem preço no estoque"}
-                  </span>
+                  {showCost && (
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      {p?.unitPrice != null ? fmtPrice(p.unitPrice * (p?.quantity ?? 1)) : "Sem preço no estoque"}
+                    </span>
+                  )}
                   {canEdit && (
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => removePart(p?.id)}>
                       <Trash2 className="w-3 h-3" />
@@ -1325,11 +1337,13 @@ function PartsSection({
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between px-2 pt-1 border-t text-sm font-medium">
-              <span>Custo total das peças</span>
-              <span>{fmtPrice(totalCost)}</span>
-            </div>
-            {hasUnpriced && (
+            {showCost && (
+              <div className="flex items-center justify-between px-2 pt-1 border-t text-sm font-medium">
+                <span>Custo total das peças</span>
+                <span>{fmtPrice(totalCost)}</span>
+              </div>
+            )}
+            {showCost && hasUnpriced && (
               <p className="text-xs text-amber-600 px-2">
                 Algumas peças não têm preço no Estoque e não entram nesse total.
               </p>
