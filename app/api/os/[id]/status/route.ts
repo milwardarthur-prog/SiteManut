@@ -13,9 +13,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
   const user = session.user as any;
   const isAdmin = user?.role === "ADMIN";
+  const PAUSE_REASONS = ["AGUARDANDO_TERCEIRO", "AGUARDANDO_ESTOQUE", "ALMOCO", "OUTRO"];
 
   try {
-    const { action } = await req.json();
+    const { action, reason, note } = await req.json();
     const current = await prisma.workOrder.findUnique({ where: { id: params?.id } });
     if (!current) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
 
@@ -58,6 +59,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       case "pause":
         if (current.status !== "EM_EXECUCAO") return NextResponse.json({ error: "Só é possível pausar uma OS em execução" }, { status: 400 });
         if (!isAdmin && current.technicianId !== user?.id) return NextResponse.json({ error: "Apenas o técnico responsável ou o gestor podem pausar" }, { status: 403 });
+        if (!PAUSE_REASONS.includes(reason)) return NextResponse.json({ error: "Informe o motivo da pausa" }, { status: 400 });
         data.status = "PAUSADA";
         break;
 
@@ -93,6 +95,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       where: { id: params?.id },
       data,
     });
+
+    // Abre/fecha o registro de pausa (histórico de motivo + duração exata).
+    if (action === "pause") {
+      await prisma.workOrderPause.create({
+        data: {
+          workOrderId: updated.id,
+          reason,
+          note: typeof note === "string" && note.trim() ? note.trim().slice(0, 500) : null,
+          createdById: user?.id,
+        },
+      });
+    } else if (action === "resume") {
+      const openPause = await prisma.workOrderPause.findFirst({
+        where: { workOrderId: updated.id, endedAt: null },
+        orderBy: { startedAt: "desc" },
+      });
+      if (openPause) {
+        await prisma.workOrderPause.update({ where: { id: openPause.id }, data: { endedAt: new Date() } });
+      }
+    }
 
     // Ao finalizar definitivamente, Checklist/Teste de Carga somam uma linha
     // no respectivo painel (que hoje é alimentado por CSV importado à mão).

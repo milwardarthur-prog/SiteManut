@@ -44,6 +44,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           include: { author: { select: { id: true, name: true } } },
           orderBy: { createdAt: "asc" },
         },
+        pauses: {
+          include: { createdBy: { select: { id: true, name: true } } },
+          orderBy: { startedAt: "asc" },
+        },
       },
     });
     if (!order) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });

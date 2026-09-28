@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Inbox, User, Clock, Loader2, Play, Pause, StopCircle, HandMetal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import PauseReasonDialog, { PAUSE_REASON_LABELS } from "@/components/pause-reason-dialog";
 
 const typeLabels: Record<string, string> = { PREVENTIVA: "Preventiva", CORRETIVA: "Corretiva", RETRABALHO: "Retrabalho" };
 const typeColors: Record<string, string> = {
@@ -72,6 +73,7 @@ export default function OSTechBoard() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const actionInFlight = useRef(false);
+  const [pausingOrder, setPausingOrder] = useState<{ id: string; orderNumber: number } | null>(null);
 
   const fetchBoard = useCallback(async (silent = false) => {
     if (actionInFlight.current) return;
@@ -120,7 +122,7 @@ export default function OSTechBoard() {
     if (view === "historico" && history.length === 0) fetchHistory();
   }, [view, history.length, fetchHistory]);
 
-  const doAction = async (orderId: string, action: string, successMsg: string) => {
+  const doAction = async (orderId: string, action: string, successMsg: string, extra?: Record<string, any>) => {
     setBusyId(orderId);
     actionInFlight.current = true;
     let ok = false;
@@ -128,7 +130,7 @@ export default function OSTechBoard() {
       const res = await fetch(`/api/os/${orderId}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...extra }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -147,6 +149,12 @@ export default function OSTechBoard() {
       actionInFlight.current = false;
     }
     if (ok) await fetchBoard(true);
+  };
+
+  const confirmPause = async (reason: string, note: string) => {
+    if (!pausingOrder) return;
+    await doAction(pausingOrder.id, "pause", `#${pausingOrder.orderNumber} pausada.`, { reason, note });
+    setPausingOrder(null);
   };
 
   const sortedMine = [...mine].sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
@@ -180,7 +188,7 @@ export default function OSTechBoard() {
                     order={o}
                     busy={busyId === o.id}
                     onOpen={() => router.push(`/os/${o.id}`)}
-                    actions={<MineActions order={o} busy={busyId === o.id} onAction={doAction} />}
+                    actions={<MineActions order={o} busy={busyId === o.id} onAction={doAction} onPauseClick={() => setPausingOrder({ id: o.id, orderNumber: o.orderNumber })} />}
                   />
                 ))
               )}
@@ -255,11 +263,22 @@ export default function OSTechBoard() {
           )}
         </div>
       )}
+
+      <PauseReasonDialog
+        open={!!pausingOrder}
+        onOpenChange={(v) => { if (!v) setPausingOrder(null); }}
+        onConfirm={confirmPause}
+        loading={!!pausingOrder && busyId === pausingOrder.id}
+      />
     </div>
   );
 }
 
-function MineActions({ order, busy, onAction }: { order: any; busy: boolean; onAction: (id: string, action: string, msg: string) => void }) {
+function MineActions({
+  order, busy, onAction, onPauseClick,
+}: {
+  order: any; busy: boolean; onAction: (id: string, action: string, msg: string) => void; onPauseClick: () => void;
+}) {
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   if (order.status === "APROVADA") {
     return (
@@ -273,7 +292,7 @@ function MineActions({ order, busy, onAction }: { order: any; busy: boolean; onA
     return (
       <div className="grid grid-cols-2 gap-2">
         <Button variant="outline" className="h-11 text-sm gap-1.5" disabled={busy}
-          onClick={(e) => { stop(e); onAction(order.id, "pause", `#${order.orderNumber} pausada.`); }}>
+          onClick={(e) => { stop(e); onPauseClick(); }}>
           <Pause className="w-4 h-4" /> Pausar
         </Button>
         <Button className="h-11 text-sm gap-1.5 bg-purple-600 hover:bg-purple-700 text-white" disabled={busy}
@@ -344,6 +363,12 @@ function TechCard({
       </div>
       {elapsed && (
         <p className="text-xs text-green-700 flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5" /> {elapsed}</p>
+      )}
+      {order.status === "PAUSADA" && order.pauses?.[0] && (
+        <p className="text-xs text-yellow-700 bg-yellow-50 rounded-lg px-2.5 py-1.5">
+          {PAUSE_REASON_LABELS[order.pauses[0].reason] ?? order.pauses[0].reason}
+          {order.pauses[0].note ? ` — ${order.pauses[0].note}` : ""}
+        </p>
       )}
       {wait && (
         <p className={`text-xs flex items-center gap-1.5 ${wait.veryUrgent ? "text-red-600 font-semibold" : wait.urgent ? "text-amber-600 font-medium" : "text-gray-400"}`}>

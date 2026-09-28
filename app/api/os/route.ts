@@ -123,6 +123,11 @@ export async function GET(req: NextRequest) {
         equipment: { select: { id: true, equipmentNumber: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         _count: { select: { parts: true, helpers: true, photos: true } },
+        pauses: {
+          where: { endedAt: null },
+          select: { reason: true, note: true, startedAt: true },
+          take: 1,
+        },
       },
       orderBy: { createdAt: "desc" },
     });

@@ -35,6 +35,11 @@ export async function GET(req: NextRequest) {
       data: { status: "PAUSADA" },
     });
 
+    // Sem createdById — é o sistema que pausou, não uma pessoa.
+    await prisma.workOrderPause.createMany({
+      data: orders.map((o) => ({ workOrderId: o.id, reason: "FIM_EXPEDIENTE" as const })),
+    });
+
     for (const order of orders) {
       if (!order.technicianId) continue;
       const label = order.equipment?.equipmentNumber ?? order.customEquipmentLabel;

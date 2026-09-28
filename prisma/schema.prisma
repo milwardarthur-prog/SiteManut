@@ -59,6 +59,16 @@ enum MaintenanceSeverity {
   PESADA
 }
 
+// Motivo de uma pausa de OS — separa "aguardando terceiro" (o que motivou
+// este recurso) de outros motivos, pra não misturar tudo sob PAUSADA.
+enum PauseReason {
+  AGUARDANDO_TERCEIRO
+  AGUARDANDO_ESTOQUE
+  ALMOCO
+  FIM_EXPEDIENTE
+  OUTRO
+}
+
 model StockItem {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -102,6 +112,7 @@ model User {
   equipmentComments EquipmentComment[]   @relation("EquipmentCommentAuthor")
   stockImports      StockImport[]        @relation("StockImportAuthor")
   pushSubscriptions PushSubscription[]
+  authoredPauses    WorkOrderPause[]     @relation("PauseAuthor")
 }
 
 // Inscrição de notificação push (Web Push) de um dispositivo do usuário —
@@ -288,6 +299,7 @@ model WorkOrder {
   helpers           WorkOrderHelper[]
   photos            WorkOrderPhoto[]
   technicalComments WorkOrderComment[]
+  pauses            WorkOrderPause[]
 
   @@index([status])
   @@index([technicianId])
@@ -295,6 +307,27 @@ model WorkOrder {
   @@index([createdAt])
   @@index([scope])
   @@index([deletedAt])
+}
+
+// Histórico de pausas de uma OS — cada pausa/retomada gera um registro
+// próprio, com motivo e (quando aplicável) nota livre (ex.: pra quem foi
+// mandada a peça). Permite somar o tempo exato aguardando terceiro mesmo com
+// pausas/retomadas repetidas, sem misturar com pausa por almoço ou o
+// auto-pause de fim de expediente.
+model WorkOrderPause {
+  id          String      @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  reason      PauseReason
+  note        String?
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  // Nulo quando a pausa foi criada pelo sistema (ex.: cron de fim de
+  // expediente), sem um usuário por trás da ação.
+  createdById String?
+  createdBy   User?       @relation("PauseAuthor", fields: [createdById], references: [id])
+
+  @@index([workOrderId])
 }
 
 model WorkOrderComment {

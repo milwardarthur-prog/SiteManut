@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import PauseReasonDialog, { PAUSE_REASON_LABELS } from "@/components/pause-reason-dialog";
 import {
   parseRevisionFilters,
   computePartsCost,
@@ -294,6 +295,7 @@ export default function OSDetailClient({ id }: { id: string }) {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [stockItems, setStockItems] = useState<{ id: string; name: string; price: number }[]>([]);
 
@@ -318,13 +320,13 @@ export default function OSDetailClient({ id }: { id: string }) {
       .catch(() => {});
   }, [fetchOrder]);
 
-  const doAction = async (action: string) => {
+  const doAction = async (action: string, extra?: Record<string, any>) => {
     setActionLoading(true);
     try {
       const res = await fetch(`/api/os/${id}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...extra }),
       });
       if (res.ok) {
         toast.success("Status atualizado!");
@@ -338,6 +340,11 @@ export default function OSDetailClient({ id }: { id: string }) {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const confirmPause = async (reason: string, note: string) => {
+    await doAction("pause", { reason, note });
+    setShowPauseDialog(false);
   };
 
   const deleteOrder = async () => {
@@ -413,6 +420,16 @@ export default function OSDetailClient({ id }: { id: string }) {
             <p className="text-sm text-muted-foreground">
               {typeLabels[order?.maintenanceType] ?? order?.maintenanceType} • {order?.equipment?.name ?? order?.customEquipmentLabel ?? ""}
             </p>
+            {status === "PAUSADA" && (() => {
+              const currentPause = (order?.pauses ?? []).find((p: any) => !p?.endedAt);
+              if (!currentPause) return null;
+              return (
+                <p className="text-xs text-yellow-700 mt-0.5">
+                  {PAUSE_REASON_LABELS[currentPause.reason] ?? currentPause.reason}
+                  {currentPause.note ? ` — ${currentPause.note}` : ""}
+                </p>
+              );
+            })()}
           </div>
         </div>
 
@@ -439,7 +456,7 @@ export default function OSDetailClient({ id }: { id: string }) {
             </Button>
           )}
           {canPause && (
-            <Button onClick={() => doAction("pause")} disabled={actionLoading} className="bg-yellow-500 hover:bg-yellow-600 text-white">
+            <Button onClick={() => setShowPauseDialog(true)} disabled={actionLoading} className="bg-yellow-500 hover:bg-yellow-600 text-white">
               <Pause className="w-4 h-4 mr-1" /> Pausar
             </Button>
           )}
@@ -551,6 +568,9 @@ export default function OSDetailClient({ id }: { id: string }) {
         <RevisionSection order={order} canEdit={canEdit || isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
       )}
 
+      {/* Pausas (histórico de motivo + duração) */}
+      {(order?.pauses?.length ?? 0) > 0 && <PauseHistorySection pauses={order.pauses} />}
+
       {/* Comments (histórico) */}
       <CommentsSection orderId={id} comments={order?.technicalComments ?? []} legacyComments={order?.comments ?? ""} canEdit={canEdit || isAdmin} onSaved={fetchOrder} />
 
@@ -584,7 +604,48 @@ export default function OSDetailClient({ id }: { id: string }) {
 
       {/* Photos */}
       <PhotosSection orderId={id} photos={order?.photos ?? []} canUpload={canTechClose || isExecuting} onSaved={fetchOrder} />
+
+      <PauseReasonDialog open={showPauseDialog} onOpenChange={setShowPauseDialog} onConfirm={confirmPause} loading={actionLoading} />
     </div>
+  );
+}
+
+function fmtPauseDuration(startedAt: string, endedAt: string | null): string {
+  const ms = new Date(endedAt ?? new Date()).getTime() - new Date(startedAt).getTime();
+  const totalMin = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const d = Math.floor(h / 24);
+  if (d > 0) return `${d}d${h % 24}h`;
+  return h > 0 ? `${h}h${String(m).padStart(2, "0")}min` : `${m}min`;
+}
+
+function PauseHistorySection({ pauses }: { pauses: any[] }) {
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2"><Pause className="w-4 h-4 text-yellow-600" /> Histórico de Pausas</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {pauses.map((p: any) => (
+            <div key={p?.id} className="flex items-center justify-between gap-3 p-2.5 bg-gray-50 rounded-lg">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                  {PAUSE_REASON_LABELS[p?.reason] ?? p?.reason}
+                  {!p?.endedAt && <span className="ml-1.5 text-xs text-yellow-700 font-normal">(em andamento)</span>}
+                </p>
+                {p?.note && <p className="text-xs text-muted-foreground truncate">{p.note}</p>}
+                <p className="text-xs text-muted-foreground">
+                  {p?.createdBy?.name ?? "Sistema"} — {new Date(p.startedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-gray-700 shrink-0">{fmtPauseDuration(p.startedAt, p.endedAt)}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

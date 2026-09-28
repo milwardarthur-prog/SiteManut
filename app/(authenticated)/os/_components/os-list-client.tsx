@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import OSTechBoard from "./os-tech-board";
+import { PAUSE_REASON_LABELS } from "@/components/pause-reason-dialog";
 
 const statusLabels: Record<string, string> = {
   PENDENTE_APROVACAO: "Pendente Aprovação",
@@ -307,6 +308,12 @@ export default function OSListClient() {
                       <p className="text-xs text-muted-foreground">
                         Técnico: {order?.technician?.name ?? "Sem técnico"}
                       </p>
+                      {order?.status === "PAUSADA" && order?.pauses?.[0] && (
+                        <p className="text-xs text-yellow-700 mt-0.5">
+                          {PAUSE_REASON_LABELS[order.pauses[0].reason] ?? order.pauses[0].reason}
+                          {order.pauses[0].note ? ` — ${order.pauses[0].note}` : ""}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
