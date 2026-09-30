@@ -123,6 +123,10 @@ export async function GET(req: NextRequest) {
         equipment: { select: { id: true, equipmentNumber: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         _count: { select: { parts: true, helpers: true, photos: true } },
+        // Ajudantes ainda ativos (sem endTime) — usado no Monitoramento pra
+        // também mostrar um card na coluna de quem está ajudando, não só na
+        // do técnico responsável.
+        helpers: { where: { endTime: null }, select: { helperId: true } },
         pauses: {
           where: { endedAt: null },
           select: { reason: true, note: true, startedAt: true },

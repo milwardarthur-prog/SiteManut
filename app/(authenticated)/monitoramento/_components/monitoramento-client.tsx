@@ -227,7 +227,13 @@ export default function MonitoramentoClient() {
             const techOrders = orders
               .filter((o) => o.technicianId === t.id)
               .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
+            // OS onde ele está ajudando (não é o responsável) — mostra
+            // também na coluna dele, marcado como "Ajudante".
+            const helperOrders = orders
+              .filter((o) => o.technicianId !== t.id && (o.helpers ?? []).some((h: any) => h.helperId === t.id))
+              .sort((a, b) => (STATUS_PRIORITY[a.status] ?? 9) - (STATUS_PRIORITY[b.status] ?? 9));
             const key = `tech-${t.id}`;
+            const totalCount = techOrders.length + helperOrders.length;
             return (
               <div
                 key={t.id}
@@ -240,14 +246,17 @@ export default function MonitoramentoClient() {
               >
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-gray-800 truncate">{t.name}</p>
-                  <span className="text-xs text-gray-400 shrink-0">{techOrders.length}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{totalCount}</span>
                 </div>
-                {techOrders.length === 0 ? (
+                {totalCount === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-6">Ocioso — sem OS ativa</p>
                 ) : (
                   <div className="space-y-2">
                     {techOrders.map((o) => (
                       <OrderCard key={o.id} order={o} onDragStart={onCardDragStart} onDragEnd={onCardDragEnd} onClick={openSummary} />
+                    ))}
+                    {helperOrders.map((o) => (
+                      <OrderCard key={`helper-${o.id}`} order={o} asHelper onDragEnd={onCardDragEnd} onClick={openSummary} />
                     ))}
                   </div>
                 )}
@@ -332,12 +341,14 @@ export default function MonitoramentoClient() {
 
 function OrderCard({
   order,
+  asHelper = false,
   onDragStart,
   onDragEnd,
   onClick,
 }: {
   order: any;
-  onDragStart: (e: React.DragEvent, orderId: string) => void;
+  asHelper?: boolean;
+  onDragStart?: (e: React.DragEvent, orderId: string) => void;
   onDragEnd: () => void;
   onClick: (orderId: string) => void;
 }) {
@@ -346,17 +357,24 @@ function OrderCard({
 
   return (
     <div
-      draggable
-      onDragStart={(e) => onDragStart(e, order.id)}
+      draggable={!asHelper}
+      onDragStart={asHelper ? undefined : (e) => onDragStart?.(e, order.id)}
       onDragEnd={onDragEnd}
       onClick={() => onClick(order.id)}
-      className="shrink-0 w-56 rounded-lg border bg-white p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing space-y-1.5"
+      className={`shrink-0 w-56 rounded-lg border p-2.5 shadow-sm hover:shadow-md transition-shadow space-y-1.5 ${
+        asHelper ? "bg-gray-50 border-dashed cursor-pointer" : "bg-white cursor-grab active:cursor-grabbing"
+      }`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-bold text-gray-900 truncate">{order.equipment?.equipmentNumber ?? order.customEquipmentLabel}</span>
         <span className="text-xs text-gray-500 shrink-0">#{order.orderNumber}</span>
       </div>
       <div className="flex flex-wrap gap-1">
+        {asHelper && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-gray-200 text-gray-700">
+            Ajudante
+          </span>
+        )}
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${typeColors[order.maintenanceType] ?? "bg-gray-100 text-gray-700"}`}>
           {typeLabels[order.maintenanceType] ?? order.maintenanceType}
         </span>
