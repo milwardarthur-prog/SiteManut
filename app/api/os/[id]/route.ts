@@ -75,12 +75,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (comments !== undefined) data.comments = comments;
     if (adminNotes !== undefined && isAdmin) data.adminNotes = adminNotes;
     if (horimeter !== undefined && horimeter !== "" && horimeter !== null) {
-      data.horimeter = parseFloat(horimeter);
+      data.horimeter = Math.round(parseFloat(horimeter));
       // Só existe equipamento de verdade pra atualizar quando já está vinculado
       if (current.equipmentId) {
         await prisma.equipment.update({
           where: { id: current.equipmentId },
-          data: { currentHorimeter: parseFloat(horimeter) },
+          data: { currentHorimeter: Math.round(parseFloat(horimeter)) },
         });
       }
     }

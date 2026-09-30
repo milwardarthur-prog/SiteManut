@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         description: description ?? null,
         model: model ?? null,
         year: year ? parseInt(year) : null,
-        currentHorimeter: currentHorimeter ? parseFloat(currentHorimeter) : 0,
+        currentHorimeter: currentHorimeter ? Math.round(parseFloat(currentHorimeter)) : 0,
         location: location ?? null,
         serialNumber: serialNumber ?? null,
         qrCodeData,

@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
       status: initialStatus,
       maintenanceType: finalType,
       scope,
-      horimeter: horimeter ? parseFloat(horimeter) : null,
+      horimeter: horimeter ? Math.round(parseFloat(horimeter)) : null,
       comments: comments ?? null,
       technicianId: assignedTech,
       createdById: user?.id,
@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
     if (horimeter && equipmentId) {
       await prisma.equipment.update({
         where: { id: equipmentId },
-        data: { currentHorimeter: parseFloat(horimeter) },
+        data: { currentHorimeter: Math.round(parseFloat(horimeter)) },
       });
     }
 

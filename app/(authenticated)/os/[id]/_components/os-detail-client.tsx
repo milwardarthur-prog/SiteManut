@@ -765,7 +765,7 @@ function AdminControlsSection({ order, technicians, onSaved }: { order: any; tec
           </div>
           <div>
             <Label className="text-xs">Horímetro</Label>
-            <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} className="bg-white" placeholder="Ex: 1250.5" />
+            <Input type="number" step="1" value={horimeter} onChange={(e: any) => setHorimeter((e?.target?.value ?? "").replace(/[^\d]/g, ""))} className="bg-white" placeholder="Ex: 1250" />
           </div>
         </div>
         <Button onClick={save} disabled={saving} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -820,7 +820,7 @@ function ChecklistSection({ order, canEdit, onSaved }: { order: any; canEdit: bo
           </div>
           <div>
             <Label className="text-xs">Horímetro</Label>
-            <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
+            <Input type="number" step="1" value={horimeter} onChange={(e: any) => setHorimeter((e?.target?.value ?? "").replace(/[^\d]/g, ""))} disabled={!canEdit} className="bg-white" />
           </div>
         </div>
         <OptionGroup label="Amostra do Tanque" value={tankSample} onChange={setTankSample} disabled={!canEdit}
@@ -885,7 +885,7 @@ function LoadTestSection({ order, canEdit, onSaved }: { order: any; canEdit: boo
           </div>
           <div>
             <Label className="text-xs">Horímetro</Label>
-            <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
+            <Input type="number" step="1" value={horimeter} onChange={(e: any) => setHorimeter((e?.target?.value ?? "").replace(/[^\d]/g, ""))} disabled={!canEdit} className="bg-white" />
           </div>
           <div>
             <Label className="text-xs">Tensão Vazio</Label>
@@ -1036,7 +1036,7 @@ function RevisionSection({
           </div>
           <div>
             <Label className="text-xs">Horímetro</Label>
-            <Input type="number" step="0.1" value={horimeter} onChange={(e: any) => setHorimeter(e?.target?.value ?? "")} disabled={!canEdit} className="bg-white" />
+            <Input type="number" step="1" value={horimeter} onChange={(e: any) => setHorimeter((e?.target?.value ?? "").replace(/[^\d]/g, ""))} disabled={!canEdit} className="bg-white" />
           </div>
           <div>
             <Label className="text-xs">Óleo 15W40 (litros)</Label>

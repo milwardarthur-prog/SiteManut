@@ -119,7 +119,7 @@ export default function EquipamentoForm({ equipmentId, initialData }: Equipament
               </div>
               <div className="space-y-2">
                 <Label>Horímetro</Label>
-                <Input type="number" step="0.1" placeholder="Ex: 1500" value={form.currentHorimeter} onChange={(e: any) => update("currentHorimeter", e?.target?.value ?? "")} />
+                <Input type="number" step="1" placeholder="Ex: 1500" value={form.currentHorimeter} onChange={(e: any) => update("currentHorimeter", (e?.target?.value ?? "").replace(/[^\d]/g, ""))} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

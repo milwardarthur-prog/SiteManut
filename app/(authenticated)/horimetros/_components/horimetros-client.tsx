@@ -855,11 +855,11 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
             <label className="block text-xs font-medium text-gray-600 mb-1">Novo horímetro</label>
             <Input
               type="number"
-              step="0.1"
-              inputMode="decimal"
+              step="1"
+              inputMode="numeric"
               autoFocus
               value={value}
-              onChange={(e) => { setValue(e.target.value); setWarning(null); }}
+              onChange={(e) => { setValue(e.target.value.replace(/[^\d]/g, "")); setWarning(null); }}
               onKeyDown={(e) => { if (e.key === "Enter" && value !== "") submit(!!warning); }}
               placeholder={fmtNum(row.currentHorimeter)}
             />
@@ -1035,11 +1035,11 @@ function LancarPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
                 <Td>
                   <Input
                     type="number"
-                    step="0.1"
-                    inputMode="decimal"
+                    step="1"
+                    inputMode="numeric"
                     className="w-28"
                     value={values[r.id] ?? ""}
-                    onChange={(e) => setValues((s) => ({ ...s, [r.id]: e.target.value }))}
+                    onChange={(e) => setValues((s) => ({ ...s, [r.id]: e.target.value.replace(/[^\d]/g, "") }))}
                   />
                 </Td>
                 <Td>
@@ -1168,7 +1168,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Últ. manut. (horímetro)</label>
-              <Input type="number" step="0.1" value={lastMaint} onChange={(e) => setLastMaint(e.target.value)} placeholder="ex.: 1200" />
+              <Input type="number" step="1" value={lastMaint} onChange={(e) => setLastMaint(e.target.value.replace(/[^\d]/g, ""))} placeholder="ex.: 1200" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Últ. manut. (data)</label>
@@ -1176,7 +1176,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Intervalo (horas)</label>
-              <Input type="number" step="0.1" value={interval} onChange={(e) => setInterval(e.target.value)} placeholder="ex.: 250" />
+              <Input type="number" step="1" value={interval} onChange={(e) => setInterval(e.target.value.replace(/[^\d]/g, ""))} placeholder="ex.: 250" />
             </div>
           </div>
           <p className="text-xs text-gray-500">

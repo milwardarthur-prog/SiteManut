@@ -341,10 +341,10 @@ export default function NovaOSClient() {
                 <Label>Horímetro do Equipamento</Label>
                 <Input
                   type="number"
-                  step="0.1"
-                  placeholder="Ex: 1500.5"
+                  step="1"
+                  placeholder="Ex: 1500"
                   value={form.horimeter}
-                  onChange={(e: any) => setForm({ ...form, horimeter: e?.target?.value ?? "" })}
+                  onChange={(e: any) => setForm({ ...form, horimeter: (e?.target?.value ?? "").replace(/[^\d]/g, "") })}
                 />
               </div>
             )}

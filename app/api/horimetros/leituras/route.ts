@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         errors.push({ equipmentId: r.equipmentId, message: "Equipamento não encontrado" });
         continue;
       }
-      const value = typeof r.value === "string" ? parseFloat(r.value) : r.value;
+      const value = typeof r.value === "string" ? Math.round(parseFloat(r.value)) : Math.round(r.value);
       if (value === undefined || value === null || isNaN(value)) {
         errors.push({ equipmentId: r.equipmentId, message: "Valor de horímetro inválido" });
         continue;

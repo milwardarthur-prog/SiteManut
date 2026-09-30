@@ -156,7 +156,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body?.lastMaintenanceHorimeter !== undefined) {
       const v = body.lastMaintenanceHorimeter;
       data.lastMaintenanceHorimeter =
-        v === "" || v === null ? null : parseFloat(v);
+        v === "" || v === null ? null : Math.round(parseFloat(v));
     }
     if (body?.lastMaintenanceDate !== undefined) {
       const v = body.lastMaintenanceDate;
@@ -190,7 +190,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body?.maintenanceIntervalHours !== undefined) {
       const v = body.maintenanceIntervalHours;
       data.maintenanceIntervalHours =
-        v === "" || v === null ? null : parseFloat(v);
+        v === "" || v === null ? null : Math.round(parseFloat(v));
     }
 
     if (Object.keys(data).length === 0) {

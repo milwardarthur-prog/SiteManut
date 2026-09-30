@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         description: description ?? null,
         model: model ?? null,
         year: year ? parseInt(year) : null,
-        currentHorimeter: currentHorimeter !== undefined && currentHorimeter !== "" ? parseFloat(currentHorimeter) : undefined,
+        currentHorimeter: currentHorimeter !== undefined && currentHorimeter !== "" ? Math.round(parseFloat(currentHorimeter)) : undefined,
         location: location ?? null,
         serialNumber: serialNumber ?? null,
         ...pickExtraFields(body),
