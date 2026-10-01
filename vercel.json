@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/pause-os",
-      "schedule": "15 12 * * *"
+      "schedule": "30 20 * * *"
     }
   ]
 }
