@@ -197,10 +197,43 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ ok: true, unchanged: true });
     }
 
-    const updated = await prisma.equipment.update({
-      where: { id: eq.id },
-      data,
-    });
+    // Se o horímetro da última manutenção for maior que a leitura atual, a
+    // leitura está desatualizada: registra como leitura oficial (histórico +
+    // horímetro atual + próxima leitura), igual a um lançamento manual.
+    const maintValue = data.lastMaintenanceHorimeter;
+    let newReading: { readingDate: Date; value: number } | null = null;
+    if (typeof maintValue === "number" && !isNaN(maintValue) && maintValue > (eq.currentHorimeter ?? 0)) {
+      const maintDate: Date | null = data.lastMaintenanceDate ?? eq.lastMaintenanceDate ?? null;
+      const readingDate =
+        maintDate && !isNaN(maintDate.getTime()) && (!eq.lastReadingDate || maintDate >= eq.lastReadingDate)
+          ? maintDate
+          : new Date();
+      data.currentHorimeter = maintValue;
+      data.lastReadingDate = readingDate;
+      data.nextReadingDate = computeNextReadingDate(
+        readingDate,
+        (data.readingFrequency ?? eq.readingFrequency) as ReadingFrequency
+      );
+      newReading = { readingDate, value: maintValue };
+    }
+
+    const updated = newReading
+      ? (
+          await prisma.$transaction([
+            prisma.horimeterReading.create({
+              data: {
+                equipmentId: eq.id,
+                readingDate: newReading.readingDate,
+                value: newReading.value,
+                note: "Registrado pelo Ajustar (horímetro da última manutenção)",
+                source: "MANUAL",
+                createdById: auth.user.userId,
+              },
+            }),
+            prisma.equipment.update({ where: { id: eq.id }, data }),
+          ])
+        )[1]
+      : await prisma.equipment.update({ where: { id: eq.id }, data });
 
     if (body?.manualStatus !== undefined || data.maintenanceSeverity !== undefined || data.maintenanceExpectedDate !== undefined) {
       await syncPainelEquipamentos();
