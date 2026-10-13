@@ -11,6 +11,7 @@ import {
   type ReadingFrequency,
 } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
+import { notifyReturnedToYard } from "@/lib/teste-carga";
 
 const VALID_FREQ = ["SEMANAL", "QUINZENAL", "MENSAL"];
 
@@ -237,6 +238,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (body?.manualStatus !== undefined || data.maintenanceSeverity !== undefined || data.maintenanceExpectedDate !== undefined) {
       await syncPainelEquipamentos();
+    }
+
+    if (data.leaseStatus === "DISPONIVEL" && eq.leaseStatus !== "DISPONIVEL") {
+      await notifyReturnedToYard([eq.id]);
     }
 
     return NextResponse.json({ ok: true, equipment: updated });

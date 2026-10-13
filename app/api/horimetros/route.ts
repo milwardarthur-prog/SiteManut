@@ -9,7 +9,9 @@ import {
   computeConsumption,
   predictMaintenance,
   getMaintenanceScheduleReason,
+  normalizeCode,
 } from "@/lib/horimetro";
+import { classifyLoadTest, getLastLoadTestDates, getOpenLoadTestOrders } from "@/lib/teste-carga";
 
 // GET — lista todos os equipamentos com dados do módulo de horímetro,
 // já com pendência de leitura e previsão de manutenção calculadas.
@@ -50,6 +52,7 @@ export async function GET(req: NextRequest) {
     });
 
     const now = new Date();
+    const [lastTests, openTestOrders] = await Promise.all([getLastLoadTestDates(), getOpenLoadTestOrders()]);
     const rows = equipments.map((e) => {
       const pending = classifyPending(e.nextReadingDate, now);
       const consumption = computeConsumption(
@@ -77,6 +80,13 @@ export async function GET(req: NextRequest) {
         prediction,
         needsSchedule: scheduleReason !== null,
         scheduleReason,
+        loadTest: classifyLoadTest({
+          equipmentNumber: e.equipmentNumber,
+          lastTest: lastTests.get(normalizeCode(e.equipmentNumber)) ?? null,
+          leaseStatus: e.leaseStatus,
+          openOrderNumber: openTestOrders.get(e.id) ?? null,
+          now,
+        }),
       };
     });
 
@@ -90,6 +100,7 @@ export async function GET(req: NextRequest) {
       locados: rows.filter((r) => r.leaseStatus === "LOCADO").length,
       disponiveis: rows.filter((r) => r.leaseStatus === "DISPONIVEL").length,
       manutencao: rows.filter((r) => r.leaseStatus === "MANUTENCAO").length,
+      testarCarga: rows.filter((r) => r.loadTest.status === "TESTAR_AGORA").length,
     };
 
     return NextResponse.json({ rows, summary });

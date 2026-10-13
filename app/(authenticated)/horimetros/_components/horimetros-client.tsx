@@ -20,6 +20,7 @@ import {
   Wrench,
   History,
   CalendarCheck,
+  Zap,
   X as XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,12 @@ type Row = {
   prediction: Prediction;
   needsSchedule: boolean;
   scheduleReason: "HOURS" | "TIME" | "BOTH" | null;
+  loadTest: {
+    status: "EM_DIA" | "TESTAR_AGORA" | "EM_ANDAMENTO" | "AGUARDANDO_RETORNO" | "NAO_APLICA";
+    lastDate: string | null;
+    daysSince: number | null;
+    openOrderNumber: number | null;
+  };
 };
 type Summary = {
   total: number;
@@ -103,6 +110,7 @@ type Summary = {
   locados: number;
   disponiveis: number;
   manutencao: number;
+  testarCarga: number;
 };
 
 // ─── Helpers de formatação ───────────────────────────────────────────────────
@@ -187,6 +195,41 @@ function ScheduleReasonBadge({ reason }: { reason: Row["scheduleReason"] }) {
   );
 }
 
+// yyyy-mm-dd (dia puro) -> dd/mm/aaaa, sem passar por fuso horário.
+const fmtDayOnly = (d: string | null) => (d ? d.split("-").reverse().join("/") : "—");
+
+function agoText(daysSince: number | null): string {
+  if (daysSince === null) return "nunca testado";
+  if (daysSince < 60) return `há ${daysSince} dias`;
+  return `há ${Math.floor(daysSince / 30)} meses`;
+}
+
+function LoadTestBadge({ info, leaseStatus }: { info: Row["loadTest"]; leaseStatus: Row["leaseStatus"] }) {
+  const base = "text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap inline-flex items-center gap-1";
+  const last = info.lastDate ? `Último teste: ${fmtDayOnly(info.lastDate)}` : "Nenhum teste registrado";
+  if (info.status === "NAO_APLICA")
+    return <span title="Teste de carga só se aplica aos geradores (GE)" className="text-gray-300">—</span>;
+  if (info.status === "EM_DIA")
+    return <span title={last} className={`${base} bg-green-100 text-green-800`}>{fmtDayOnly(info.lastDate)}</span>;
+  if (info.status === "TESTAR_AGORA")
+    return (
+      <span title={last} className={`${base} bg-amber-100 text-amber-800 font-semibold`}>
+        <Zap className="w-3 h-3" /> Testar agora · {agoText(info.daysSince)}
+      </span>
+    );
+  if (info.status === "EM_ANDAMENTO")
+    return (
+      <span title={last} className={`${base} bg-cyan-100 text-cyan-800`}>
+        <Zap className="w-3 h-3" /> Teste na OS #{info.openOrderNumber}
+      </span>
+    );
+  return (
+    <span title={`${last} — só dá pra testar com a máquina no pátio`} className={`${base} bg-gray-100 text-gray-500`}>
+      Vencido · {leaseStatus === "MANUTENCAO" ? "em manutenção" : "locado"}
+    </span>
+  );
+}
+
 function LeaseBadge({
   status,
   client,
@@ -264,7 +307,7 @@ export default function HorimetrosClient() {
 
   const filtered = useMemo(() => {
     const t = search.toLowerCase();
-    return rows.filter((r) => {
+    const list = rows.filter((r) => {
       if (t && !r.equipmentNumber.toLowerCase().includes(t) && !(r.currentClient ?? "").toLowerCase().includes(t)) return false;
       if (fCliente && r.currentClient !== fCliente) return false;
       if (fFreq && r.readingFrequency !== fFreq) return false;
@@ -274,8 +317,14 @@ export default function HorimetrosClient() {
       if (fSituacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (fSituacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
       if (fSituacao === "manutencao" && r.leaseStatus !== "MANUTENCAO") return false;
+      if (fSituacao === "testar_carga" && r.loadTest.status !== "TESTAR_AGORA") return false;
       return true;
     });
+    // Na lista de "Testar carga", as mais atrasadas (e as nunca testadas) vão pro topo.
+    if (fSituacao === "testar_carga") {
+      list.sort((a, b) => (b.loadTest.daysSince ?? Infinity) - (a.loadTest.daysSince ?? Infinity));
+    }
+    return list;
   }, [rows, search, fCliente, fFreq, fSituacao]);
 
   const imprimir = () => {
@@ -369,6 +418,11 @@ export default function HorimetrosClient() {
             active={fSituacao === "manutencao"}
             onClick={() => setFSituacao("manutencao")}
           />
+          <SummaryCard
+            label="Testar Carga" value={summary.testarCarga} icon={<Zap className="w-4 h-4" />} color="text-amber-600"
+            active={fSituacao === "testar_carga"}
+            onClick={() => setFSituacao("testar_carga")}
+          />
         </div>
       )}
 
@@ -386,6 +440,7 @@ export default function HorimetrosClient() {
           { v: "locados", t: "Locados" },
           { v: "disponiveis", t: "Disponíveis" },
           { v: "manutencao", t: "Em manutenção" },
+          { v: "testar_carga", t: "Testar carga (disponíveis vencidos)" },
         ]} />
         <FilterSelect label="Cliente/Local" value={fCliente} onChange={setFCliente} options={[
           { v: "", t: "Todos" },
@@ -411,6 +466,7 @@ export default function HorimetrosClient() {
               <Th className="text-right">Horímetro atual</Th>
               <Th className="text-right">Horas p/ manutenção</Th>
               <Th>Motivo</Th>
+              <Th>Teste de carga</Th>
               {showSchedule && <Th>Agendamento</Th>}
               {showSchedule && <Th>Comentário</Th>}
             </tr>
@@ -433,6 +489,9 @@ export default function HorimetrosClient() {
                 </Td>
                 <Td>
                   <ScheduleReasonBadge reason={r.scheduleReason} />
+                </Td>
+                <Td>
+                  <LoadTestBadge info={r.loadTest} leaseStatus={r.leaseStatus} />
                 </Td>
                 {showSchedule && (
                   <Td onClick={(e) => e.stopPropagation()}>
@@ -467,7 +526,7 @@ export default function HorimetrosClient() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={showSchedule ? 8 : 6} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={showSchedule ? 9 : 7} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
@@ -600,6 +659,8 @@ function DetailDialog({
             <DetailField label="Confiança" value={<ConfBadge c={row.consumption.confidence} />} />
             <DetailField label="Última manutenção (data)" value={fmtDate(row.lastMaintenanceDate)} />
             <DetailField label="Última manutenção (horímetro)" value={fmtNum(row.lastMaintenanceHorimeter)} />
+            <DetailField label="Último teste de carga" value={fmtDayOnly(row.loadTest.lastDate)} />
+            <DetailField label="Prazo do teste de carga" value={<LoadTestBadge info={row.loadTest} leaseStatus={row.leaseStatus} />} />
             {row.leaseStatus === "MANUTENCAO" && (
               <>
                 <DetailField

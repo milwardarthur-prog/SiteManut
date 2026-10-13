@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { normalizeCode } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
+import { notifyReturnedToYard } from "@/lib/teste-carga";
 
 // Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
 // Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
@@ -251,6 +252,17 @@ export async function POST(req: NextRequest) {
       });
 
       await prisma.$transaction(ops);
+
+      // Equipamentos que estavam locados e voltaram ao pátio neste arquivo.
+      const returnedIds = allEquip
+        .filter(
+          (e) =>
+            e.leaseStatus === "LOCADO" &&
+            !leaseCodes.has(normalizeCode(e.equipmentNumber)) &&
+            e.locationSource !== "MANUAL"
+        )
+        .map((e) => e.id);
+      await notifyReturnedToYard(returnedIds);
 
       const summary = {
         leased: preview.leaseList,

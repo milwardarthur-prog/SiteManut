@@ -19,6 +19,7 @@ type Row = {
   pendingStatus: "EM_DIA" | "ATRASADO" | "SEM_LEITURA";
   daysLate: number;
   needsSchedule: boolean;
+  loadTest: { status: string };
 };
 
 const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
@@ -103,6 +104,7 @@ export default function ImprimirClient() {
       if (situacao === "locados" && r.leaseStatus !== "LOCADO") return false;
       if (situacao === "disponiveis" && r.leaseStatus !== "DISPONIVEL") return false;
       if (situacao === "manutencao" && r.leaseStatus !== "MANUTENCAO") return false;
+      if (situacao === "testar_carga" && r.loadTest.status !== "TESTAR_AGORA") return false;
       return true;
     });
   }, [rows, cliente, freq, situacao]);
@@ -157,6 +159,7 @@ export default function ImprimirClient() {
     locados: "Locados",
     disponiveis: "Disponíveis",
     manutencao: "Em manutenção",
+    testar_carga: "Testar carga",
     todos: "Todos",
   };
 

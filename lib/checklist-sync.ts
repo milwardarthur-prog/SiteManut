@@ -92,9 +92,12 @@ export async function syncTesteCargaToPanel(orderId: string): Promise<void> {
       include: { equipment: { select: { equipmentNumber: true } } },
     });
     if (!order || order.scope !== "TESTE_CARGA") return;
+    // Sem a data do teste preenchida na OS, usa o dia do encerramento (em
+    // Brasília) — senão a linha entra sem data e o prazo de 90 dias não reseta.
+    const fallbackDay = new Date((order.closedAt ?? new Date()).getTime() - 3 * 60 * 60 * 1000);
     await appendRow(TESTE_CARGA_KEY, TESTE_CARGA_HEADER, {
       Equipamento: order.equipment?.equipmentNumber ?? "",
-      Data: fmtDateUTC(order.loadTestDate),
+      Data: fmtDateUTC(order.loadTestDate ?? fallbackDay),
       Tensao_Vazio: order.voltageEmpty ?? "",
       Frequencia_Vazio: order.frequencyEmpty ?? "",
       Amperagem: order.load ?? "",
