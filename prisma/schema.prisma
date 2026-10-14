@@ -172,11 +172,11 @@ model Equipment {
 
   // ── Módulo de controle de horímetro ──
   // Leitura de horímetro
-  readingFrequency         ReadingFrequency @default(MENSAL)
+  readingFrequency         ReadingFrequency     @default(MENSAL)
   lastReadingDate          DateTime?
   nextReadingDate          DateTime?
   // Locação (separado do status operacional / de OS)
-  leaseStatus              LeaseStatus      @default(DISPONIVEL)
+  leaseStatus              LeaseStatus          @default(DISPONIVEL)
   currentClient            String?
   lastLocationUpdate       DateTime?
   locationSource           ReadingSource?
@@ -271,22 +271,22 @@ model WorkOrder {
   frequencyLoad  String?
 
   // Campos específicos de REVISÃO (troca de óleo e filtros)
-  revisionDate    DateTime?
-  oilLiters       String?
+  revisionDate     DateTime?
+  oilLiters        String?
   // JSON: { "fuelFilter1": { status: "TROCADO" | "NAO", stockItemName?, unitPrice? }, ... }
   // unitPrice é "congelado" no momento em que a revisão é salva (mesma lógica de WorkOrderPart.unitPrice)
-  revisionFilters String?
+  revisionFilters  String?
   // Óleo usado na revisão — item do Estoque escolhido e custo total (litros × preço/litro),
   // ambos congelados no momento em que a revisão é salva.
   oilStockItemName String?
   oilCost          Float?
 
-  technicianId String?
-  technician   User?     @relation("TechnicianOrders", fields: [technicianId], references: [id])
-  createdById  String
-  createdBy    User      @relation("CreatorOrders", fields: [createdById], references: [id])
-  closedById   String?
-  closedBy     User?     @relation("CloserOrders", fields: [closedById], references: [id])
+  technicianId         String?
+  technician           User?      @relation("TechnicianOrders", fields: [technicianId], references: [id])
+  createdById          String
+  createdBy            User       @relation("CreatorOrders", fields: [createdById], references: [id])
+  closedById           String?
+  closedBy             User?      @relation("CloserOrders", fields: [closedById], references: [id])
   // Nulo para itens que ainda não têm patrimônio cadastrado (ex.: em
   // fabricação) — nesse caso, customEquipmentLabel descreve o item em texto
   // livre. Quando o item vira patrimônio de verdade, a OS pode ser vinculada
@@ -300,6 +300,7 @@ model WorkOrder {
   photos            WorkOrderPhoto[]
   technicalComments WorkOrderComment[]
   pauses            WorkOrderPause[]
+  checklistItems    WorkOrderChecklistItem[]
 
   @@index([status])
   @@index([technicianId])
@@ -378,11 +379,35 @@ model WorkOrderPhoto {
   cloudStoragePath String
   contentType      String    @default("image/jpeg")
   isPublic         Boolean   @default(false)
+  // Item do checklist de fotos da Revisão a que a foto pertence (null = foto avulsa antiga).
+  itemKey          String?
   workOrderId      String
   workOrder        WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())
 
   @@index([workOrderId])
+}
+
+enum ChecklistItemStatus {
+  OK
+  ATENCAO
+  INDISPONIVEL
+}
+
+// Resultado de um item do checklist de fotos da Revisão (as fotos ficam em
+// WorkOrderPhoto, ligadas pelo mesmo itemKey). ATENCAO exige observação e
+// vira pendência pro gestor.
+model WorkOrderChecklistItem {
+  id          String              @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder           @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  itemKey     String
+  status      ChecklistItemStatus
+  note        String?             @db.Text
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([workOrderId, itemKey])
 }
 
 model DataStore {

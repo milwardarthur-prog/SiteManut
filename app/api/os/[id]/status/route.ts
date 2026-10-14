@@ -6,6 +6,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncChecklistToPanel, syncTesteCargaToPanel } from "@/lib/checklist-sync";
 import { syncHorimeterFromRevision } from "@/lib/horimeter-sync";
+import { isPhotoStorageConfigured } from "@/lib/photo-storage";
+import { checklistPendencies } from "@/lib/revisao-checklist";
+import { sendPushToUser } from "@/lib/push";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -71,6 +74,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
       case "tech_close":
         if (current.status !== "EM_EXECUCAO") return NextResponse.json({ error: "OS precisa estar em execução" }, { status: 400 });
+        // Revisão só encerra com o checklist de fotos completo (quando o
+        // armazenamento de fotos está configurado).
+        if (current.scope === "REVISAO" && isPhotoStorageConfigured()) {
+          const [items, photos] = await Promise.all([
+            prisma.workOrderChecklistItem.findMany({ where: { workOrderId: current.id } }),
+            prisma.workOrderPhoto.findMany({ where: { workOrderId: current.id, itemKey: { not: null } }, select: { itemKey: true } }),
+          ]);
+          const missing = checklistPendencies({
+            items: items.map((i) => ({ itemKey: i.itemKey, status: i.status, note: i.note })),
+            photos,
+            voltageEmpty: current.voltageEmpty,
+            frequencyEmpty: current.frequencyEmpty,
+          });
+          if (missing.length > 0) {
+            return NextResponse.json(
+              { error: `Complete o checklist de fotos antes de encerrar (${missing.length} pendência(s)): ${missing.slice(0, 3).join("; ")}${missing.length > 3 ? "…" : ""}` },
+              { status: 400 }
+            );
+          }
+        }
         data.status = "AGUARDANDO_ENCERRAMENTO";
         data.techClosedAt = new Date();
         break;
@@ -113,6 +136,35 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       });
       if (openPause) {
         await prisma.workOrderPause.update({ where: { id: openPause.id }, data: { endedAt: new Date() } });
+      }
+    }
+
+    // Revisão encerrada com itens em "Atenção": avisa os gestores (pendência).
+    if (action === "tech_close" && current.scope === "REVISAO") {
+      try {
+        const attention = await prisma.workOrderChecklistItem.count({
+          where: { workOrderId: updated.id, status: "ATENCAO" },
+        });
+        if (attention > 0) {
+          const [admins, eq] = await Promise.all([
+            prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } }),
+            current.equipmentId
+              ? prisma.equipment.findUnique({ where: { id: current.equipmentId }, select: { equipmentNumber: true } })
+              : null,
+          ]);
+          const label = eq?.equipmentNumber ?? updated.customEquipmentLabel ?? "equipamento";
+          await Promise.all(
+            admins.map((a) =>
+              sendPushToUser(a.id, {
+                title: `Revisão ${label}: ${attention} item(ns) em atenção`,
+                body: `OS #${updated.orderNumber} aguarda seu encerramento. Veja as pendências do checklist.`,
+                url: `/os/${updated.id}`,
+              })
+            )
+          );
+        }
+      } catch (e) {
+        console.error("[tech_close revisão atenção]", e);
       }
     }
 

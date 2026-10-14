@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import PauseReasonDialog, { PAUSE_REASON_LABELS } from "@/components/pause-reason-dialog";
+import RevisaoChecklist from "@/components/revisao-checklist";
 import {
   parseRevisionFilters,
   computePartsCost,
@@ -568,6 +569,15 @@ export default function OSDetailClient({ id }: { id: string }) {
       {/* Revisão */}
       {order?.scope === "REVISAO" && (
         <RevisionSection order={order} canEdit={canEdit || isAdmin} showCost={isAdmin} stockItems={stockItems} onSaved={fetchOrder} />
+      )}
+      {order?.scope === "REVISAO" && (
+        <RevisaoChecklist
+          orderId={id}
+          canEdit={canEdit || (isAdmin && status === "AGUARDANDO_ENCERRAMENTO")}
+          voltageEmpty={order?.voltageEmpty}
+          frequencyEmpty={order?.frequencyEmpty}
+          onChanged={fetchOrder}
+        />
       )}
 
       {/* Pausas (histórico de motivo + duração) */}
