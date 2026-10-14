@@ -46,6 +46,7 @@ type PreviewResult = {
   willLease: number;
   willAvailable: number;
   manualPreserved: number;
+  manualIgnored: { equipmentNumber: string; client: string }[];
   duplicates: string[];
   notInBase: string[];
   errorRows: { line: number; message: string }[];
@@ -116,28 +117,32 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
 
   const notInBase = Array.from(leaseMap.keys()).filter((c) => !baseSet.has(c));
 
+  // Locação manual e "em manutenção" são travas: o equipamento só sai delas
+  // por ação manual. Um contrato no arquivo (ex.: evento no pátio do cliente,
+  // que entra e sai) NÃO altera cliente nem status dessas máquinas — nem
+  // quando o contrato aparece, nem quando encerra.
+  const protectedCodes = new Set(
+    allEquip
+      .filter((e) => e.leaseStatus === "MANUTENCAO" || (e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO"))
+      .map((e) => normalizeCode(e.equipmentNumber))
+  );
+
   const validLease = Array.from(leaseMap.entries())
-    .filter(([code]) => baseSet.has(code))
+    .filter(([code]) => baseSet.has(code) && !protectedCodes.has(code))
     .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
 
-  // Equipamentos locados sem contrato ativo (marcados manualmente) ou em
-  // manutenção não aparecem no relatório — preserva o status em vez de
-  // marcar como disponível. "Em manutenção" é sempre preservado, porque um
-  // relatório de locação nunca tem como representar esse estado — só uma
-  // ação manual (ex.: "Devolver ao serviço") deveria poder tirar o
-  // equipamento dele.
-  const manualPreserved = allEquip.filter((e) => {
-    const code = normalizeCode(e.equipmentNumber);
-    if (leaseMap.has(code)) return false;
-    if (e.leaseStatus === "MANUTENCAO") return true;
-    return e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO";
-  }).length;
+  const manualIgnored = Array.from(leaseMap.entries())
+    .filter(([code]) => protectedCodes.has(code))
+    .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
+
+  const manualPreserved = protectedCodes.size;
 
   return {
     foundInFile: leaseMap.size,
     willLease: validLease.length,
     willAvailable: baseSet.size - validLease.length - manualPreserved,
     manualPreserved,
+    manualIgnored,
     duplicates,
     notInBase,
     errorRows,

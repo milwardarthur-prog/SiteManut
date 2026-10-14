@@ -1819,7 +1819,7 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
               <MiniStat label="No arquivo" value={preview.foundInFile} />
               <MiniStat label="Ficarão locados" value={preview.willLease} color="text-blue-600" />
               <MiniStat label="Ficarão disponíveis" value={preview.willAvailable} color="text-green-600" />
-              <MiniStat label="Mantidos (locação manual)" value={preview.manualPreserved ?? 0} color="text-purple-600" />
+              <MiniStat label="Mantidos (manual/manutenção)" value={preview.manualPreserved ?? 0} color="text-purple-600" />
               <MiniStat label="Linhas com erro" value={preview.errorRows?.length ?? 0} color="text-red-600" />
             </div>
 
@@ -1830,6 +1830,12 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
               </div>
             )}
 
+            {(preview.manualIgnored?.length > 0) && (
+              <p className="text-xs text-purple-700">
+                Contrato ignorado (locação manual/manutenção não é alterada pelo arquivo):{" "}
+                {preview.manualIgnored.map((m: any) => `${m.equipmentNumber} (${m.client})`).join(", ")}
+              </p>
+            )}
             {(preview.duplicates?.length > 0) && (
               <p className="text-xs text-red-600">Duplicados: {preview.duplicates.join(", ")}</p>
             )}
