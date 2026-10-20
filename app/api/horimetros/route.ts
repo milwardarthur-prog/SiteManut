@@ -53,6 +53,19 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const [lastTests, openTestOrders] = await Promise.all([getLastLoadTestDates(), getOpenLoadTestOrders()]);
+
+    // Problema do equipamento em manutenção = comentário técnico mais recente
+    // (o mesmo que o painel externo usa como descrição da manutenção).
+    const inMaintenance = equipments.filter((e) => e.leaseStatus === "MANUTENCAO").map((e) => e.id);
+    const lastCommentByEquipment = new Map<string, string>();
+    if (inMaintenance.length > 0) {
+      const comments = await prisma.equipmentComment.findMany({
+        where: { equipmentId: { in: inMaintenance } },
+        orderBy: { createdAt: "desc" },
+        select: { equipmentId: true, content: true },
+      });
+      for (const c of comments) if (!lastCommentByEquipment.has(c.equipmentId)) lastCommentByEquipment.set(c.equipmentId, c.content);
+    }
     const rows = equipments.map((e) => {
       const pending = classifyPending(e.nextReadingDate, now);
       const consumption = computeConsumption(
@@ -80,6 +93,7 @@ export async function GET(req: NextRequest) {
         prediction,
         needsSchedule: scheduleReason !== null,
         scheduleReason,
+        lastComment: lastCommentByEquipment.get(e.id) ?? null,
         loadTest: classifyLoadTest({
           equipmentNumber: e.equipmentNumber,
           lastTest: lastTests.get(normalizeCode(e.equipmentNumber)) ?? null,

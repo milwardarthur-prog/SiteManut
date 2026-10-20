@@ -5,7 +5,6 @@ import { useSession } from "next-auth/react";
 import {
   Gauge,
   Loader2,
-  Printer,
   Upload,
   AlertTriangle,
   CircleSlash,
@@ -96,6 +95,7 @@ type Row = {
   prediction: Prediction;
   needsSchedule: boolean;
   scheduleReason: "HOURS" | "TIME" | "BOTH" | null;
+  lastComment: string | null;
   loadTest: {
     status: "EM_DIA" | "TESTAR_AGORA" | "EM_ANDAMENTO" | "AGUARDANDO_RETORNO" | "NAO_APLICA";
     lastDate: string | null;
@@ -327,16 +327,6 @@ export default function HorimetrosClient() {
     return list;
   }, [rows, search, fCliente, fFreq, fSituacao]);
 
-  const imprimir = () => {
-    const p = new URLSearchParams();
-    if (fCliente) p.set("cliente", fCliente);
-    if (fFreq) p.set("freq", fFreq);
-    // Por padrão a lista de coleta traz só os atrasados; se um filtro de
-    // situação específico já estiver selecionado na tela, respeita ele.
-    p.set("situacao", fSituacao === "todos" ? "atrasados" : fSituacao);
-    window.open(`/horimetros/imprimir?${p.toString()}`, "_blank");
-  };
-
   if (status === "loading" || (loading && rows.length === 0)) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -378,9 +368,6 @@ export default function HorimetrosClient() {
           </Button>
           <Button onClick={() => setManutencaoOpen(true)} variant="outline" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">
             <Wrench className="w-4 h-4" /> Em Manutenção
-          </Button>
-          <Button onClick={imprimir} variant="outline" className="gap-2">
-            <Printer className="w-4 h-4" /> Imprimir lista
           </Button>
         </div>
       </div>
@@ -455,7 +442,33 @@ export default function HorimetrosClient() {
         <div className="text-sm text-gray-500 pb-2">{filtered.length} equipamento(s)</div>
       </div>
 
-      {/* Tabela mestre — clique num equipamento para ver todos os detalhes */}
+      {/* Visão "Em manutenção": só o equipamento e o problema (último comentário) */}
+      {fSituacao === "manutencao" ? (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <Th>Equipamento</Th>
+                <Th>Problema</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {filtered.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelected(r)}>
+                  <Td className="font-medium text-gray-900 whitespace-nowrap align-top">{r.equipmentNumber}</Td>
+                  <Td className="text-gray-800 whitespace-pre-wrap break-words">
+                    {r.lastComment ? r.lastComment : <span className="text-gray-400 italic">Sem descrição</span>}
+                  </Td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={2} className="text-center text-gray-400 py-8">Nenhum equipamento em manutenção.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+      /* Tabela mestre — clique num equipamento para ver todos os detalhes */
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
@@ -531,6 +544,7 @@ export default function HorimetrosClient() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Painel: Lançar Leituras */}
       <Sheet open={lancarOpen} onOpenChange={setLancarOpen}>
