@@ -8,6 +8,7 @@ import { syncChecklistToPanel, syncTesteCargaToPanel } from "@/lib/checklist-syn
 import { syncHorimeterFromRevision } from "@/lib/horimeter-sync";
 import { isPhotoStorageConfigured } from "@/lib/photo-storage";
 import { checklistPendencies } from "@/lib/revisao-checklist";
+import { canSkipChecklist } from "@/lib/revisao-access";
 import { sendPushToUser } from "@/lib/push";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
@@ -76,7 +77,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         if (current.status !== "EM_EXECUCAO") return NextResponse.json({ error: "OS precisa estar em execução" }, { status: 400 });
         // Revisão só encerra com o checklist de fotos completo (quando o
         // armazenamento de fotos está configurado).
-        if (current.scope === "REVISAO" && isPhotoStorageConfigured()) {
+        if (current.scope === "REVISAO" && isPhotoStorageConfigured() && !canSkipChecklist(user?.email)) {
           const [items, photos] = await Promise.all([
             prisma.workOrderChecklistItem.findMany({ where: { workOrderId: current.id } }),
             prisma.workOrderPhoto.findMany({ where: { workOrderId: current.id, itemKey: { not: null } }, select: { itemKey: true } }),

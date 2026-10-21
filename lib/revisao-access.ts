@@ -5,6 +5,14 @@ import { prisma } from "@/lib/db";
 
 const TECH_EDITABLE = ["APROVADA", "EM_EXECUCAO", "PAUSADA"];
 
+// Únicos usuários que podem encerrar uma Revisão sem o checklist de fotos
+// completo (outros gestores continuam sujeitos à exigência).
+const CHECKLIST_BYPASS_EMAILS = ["milwardarthur@gmail.com"];
+
+export function canSkipChecklist(email: string | null | undefined): boolean {
+  return !!email && CHECKLIST_BYPASS_EMAILS.includes(email.trim().toLowerCase());
+}
+
 // Valida sessão + OS de Revisão. Com `write`, exige também que o usuário seja
 // gestor, técnico responsável ou ajudante e que a OS ainda esteja editável.
 export async function loadRevisionOrder(orderId: string, write: boolean) {
