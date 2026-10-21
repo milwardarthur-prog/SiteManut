@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { normalizeCode } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
-import { notifyReturnedToYard } from "@/lib/teste-carga";
+import { RETURN_CONFERENCE_NOTE } from "@/lib/retorno-locacao";
 
 // Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
 // Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
@@ -47,6 +47,7 @@ type PreviewResult = {
   willAvailable: number;
   manualPreserved: number;
   manualIgnored: { equipmentNumber: string; client: string }[];
+  willConference: string[];
   duplicates: string[];
   notInBase: string[];
   errorRows: { line: number; message: string }[];
@@ -137,10 +138,22 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
 
   const manualPreserved = protectedCodes.size;
 
+  // Locadas (pelo arquivo anterior) que saíram do arquivo: voltaram de
+  // locação e vão pra conferência em vez de ficarem disponíveis direto.
+  const willConference = allEquip
+    .filter(
+      (e) =>
+        e.leaseStatus === "LOCADO" &&
+        e.locationSource !== "MANUAL" &&
+        !validLease.some((l) => l.equipmentNumber === normalizeCode(e.equipmentNumber))
+    )
+    .map((e) => e.equipmentNumber);
+
   return {
     foundInFile: leaseMap.size,
     willLease: validLease.length,
-    willAvailable: baseSet.size - validLease.length - manualPreserved,
+    willAvailable: baseSet.size - validLease.length - manualPreserved - willConference.length,
+    willConference,
     manualPreserved,
     manualIgnored,
     duplicates,
@@ -243,6 +256,29 @@ export async function POST(req: NextRequest) {
         if (e.locationSource === "MANUAL" && e.leaseStatus === "LOCADO") {
           return []; // preserva a locação manual
         }
+        // Voltou de locação: vai pra conferência (manutenção leve) em vez de
+        // ficar disponível direto. O comentário é o "problema" exibido.
+        if (e.leaseStatus === "LOCADO") {
+          return [
+            prisma.equipment.update({
+              where: { id: e.id },
+              data: {
+                leaseStatus: "MANUTENCAO",
+                currentClient: null,
+                location: "",
+                lastLocationUpdate: now,
+                locationSource: "CSV",
+                maintenanceSeverity: "LEVE",
+                maintenanceExpectedDate: null,
+                maintenanceScheduledDate: null,
+                maintenanceScheduledNote: null,
+              },
+            }),
+            prisma.equipmentComment.create({
+              data: { content: RETURN_CONFERENCE_NOTE, equipmentId: e.id, authorId: auth.user.userId },
+            }),
+          ];
+        }
         return [
           prisma.equipment.update({
             where: { id: e.id },
@@ -257,17 +293,6 @@ export async function POST(req: NextRequest) {
       });
 
       await prisma.$transaction(ops);
-
-      // Equipamentos que estavam locados e voltaram ao pátio neste arquivo.
-      const returnedIds = allEquip
-        .filter(
-          (e) =>
-            e.leaseStatus === "LOCADO" &&
-            !leaseCodes.has(normalizeCode(e.equipmentNumber)) &&
-            e.locationSource !== "MANUAL"
-        )
-        .map((e) => e.id);
-      await notifyReturnedToYard(returnedIds);
 
       const summary = {
         leased: preview.leaseList,

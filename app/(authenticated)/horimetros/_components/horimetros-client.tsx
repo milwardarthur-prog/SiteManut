@@ -1330,7 +1330,13 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
         toast.error(data.error || "Erro ao salvar.");
         return;
       }
-      toast.success(client ? `${row.equipmentNumber} marcado como locado.` : `${row.equipmentNumber} liberado.`);
+      toast.success(
+        client
+          ? `${row.equipmentNumber} marcado como locado.`
+          : data.sentToConference
+          ? `${row.equipmentNumber} voltou de locação e foi para conferência.`
+          : `${row.equipmentNumber} liberado.`
+      );
       setClientDrafts((s) => ({ ...s, [row.id]: "" }));
       onDone();
     } catch {
@@ -1838,9 +1844,10 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
         <Card>
           <CardContent className="p-4 space-y-3">
             <h3 className="font-semibold text-gray-800">Prévia da importação</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MiniStat label="No arquivo" value={preview.foundInFile} />
               <MiniStat label="Ficarão locados" value={preview.willLease} color="text-blue-600" />
+              <MiniStat label="Irão para conferência" value={preview.willConference?.length ?? 0} color="text-amber-600" />
               <MiniStat label="Ficarão disponíveis" value={preview.willAvailable} color="text-green-600" />
               <MiniStat label="Mantidos (manual/manutenção)" value={preview.manualPreserved ?? 0} color="text-purple-600" />
               <MiniStat label="Linhas com erro" value={preview.errorRows?.length ?? 0} color="text-red-600" />
@@ -1853,6 +1860,11 @@ function LocalizacaoPanel({ onDone }: { onDone: () => void }) {
               </div>
             )}
 
+            {(preview.willConference?.length > 0) && (
+              <p className="text-xs text-amber-700">
+                Voltaram de locação e irão para conferência (manutenção leve): {preview.willConference.join(", ")}
+              </p>
+            )}
             {(preview.manualIgnored?.length > 0) && (
               <p className="text-xs text-purple-700">
                 Contrato ignorado (locação manual/manutenção não é alterada pelo arquivo):{" "}

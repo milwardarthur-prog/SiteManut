@@ -12,6 +12,7 @@ import {
 } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
 import { notifyReturnedToYard } from "@/lib/teste-carga";
+import { RETURN_CONFERENCE_NOTE } from "@/lib/retorno-locacao";
 
 const VALID_FREQ = ["SEMANAL", "QUINZENAL", "MENSAL"];
 
@@ -102,10 +103,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     // Status manual de locação — usado tanto para marcar um equipamento locado
     // sem contrato ativo (não aparece na importação de CSV) quanto para marcá-lo
     // em manutenção, ou devolvê-lo a disponível.
+    let sentToConference = false;
     if (body?.manualStatus !== undefined) {
-      const status = String(body.manualStatus);
+      let status = String(body.manualStatus);
       if (!["LOCADO", "DISPONIVEL", "MANUTENCAO"].includes(status)) {
         return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+      }
+      // Máquina que volta de locação passa pela vistoria antes de ficar disponível.
+      if (status === "DISPONIVEL" && eq.leaseStatus === "LOCADO") {
+        status = "MANUTENCAO";
+        sentToConference = true;
       }
       const client = typeof body.manualClient === "string" ? body.manualClient.trim() : "";
       if (status === "LOCADO" && !client) {
@@ -118,13 +125,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       data.lastLocationUpdate = new Date();
 
       if (status === "MANUTENCAO") {
-        const severity = String(body.maintenanceSeverity ?? "LEVE");
+        const severity = sentToConference ? "LEVE" : String(body.maintenanceSeverity ?? "LEVE");
         if (!["LEVE", "PESADA"].includes(severity)) {
           return NextResponse.json({ error: "Severidade inválida" }, { status: 400 });
         }
         data.maintenanceSeverity = severity;
         data.maintenanceExpectedDate =
-          body.maintenanceExpectedDate === "" || body.maintenanceExpectedDate == null
+          sentToConference || body.maintenanceExpectedDate === "" || body.maintenanceExpectedDate == null
             ? null
             : new Date(body.maintenanceExpectedDate);
         // A manutenção agendada começou: o agendamento deixa de valer.
@@ -236,6 +243,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         )[1]
       : await prisma.equipment.update({ where: { id: eq.id }, data });
 
+    // O comentário é o "problema" mostrado na visão Em manutenção (e no painel
+    // externo), então precisa existir antes da sincronização abaixo.
+    if (sentToConference) {
+      await prisma.equipmentComment.create({
+        data: { content: RETURN_CONFERENCE_NOTE, equipmentId: eq.id, authorId: auth.user.userId },
+      });
+    }
+
     if (body?.manualStatus !== undefined || data.maintenanceSeverity !== undefined || data.maintenanceExpectedDate !== undefined) {
       await syncPainelEquipamentos();
     }
@@ -244,7 +259,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       await notifyReturnedToYard([eq.id]);
     }
 
-    return NextResponse.json({ ok: true, equipment: updated });
+    return NextResponse.json({ ok: true, equipment: updated, sentToConference });
   } catch (e: any) {
     console.error("[horimetros/[id] PUT]", e);
     return NextResponse.json({ error: "Erro ao atualizar equipamento" }, { status: 500 });
