@@ -247,7 +247,7 @@ function LeaseBadge({
     );
   if (status === "LOCADO")
     return (
-      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800 whitespace-nowrap">
+      <span className="text-xs px-2 py-0.5 rounded-lg font-medium bg-blue-100 text-blue-800 inline-block max-w-[170px] 2xl:max-w-[230px] break-words">
         {client || "Locado"}
         {manual && <span className="ml-1 text-purple-700" title="Marcado manualmente (sem contrato ativo)">•manual</span>}
       </span>
@@ -479,7 +479,7 @@ export default function HorimetrosClient() {
               <Th className="text-right">Horímetro atual</Th>
               <Th className="text-right">Horas p/ manutenção</Th>
               <Th>Motivo</Th>
-              <Th>Teste de carga</Th>
+              {!showSchedule && <Th>Teste de carga</Th>}
               {showSchedule && <Th>Agendamento</Th>}
               {showSchedule && <Th>Comentário</Th>}
             </tr>
@@ -503,9 +503,11 @@ export default function HorimetrosClient() {
                 <Td>
                   <ScheduleReasonBadge reason={r.scheduleReason} />
                 </Td>
-                <Td>
-                  <LoadTestBadge info={r.loadTest} leaseStatus={r.leaseStatus} />
-                </Td>
+                {!showSchedule && (
+                  <Td>
+                    <LoadTestBadge info={r.loadTest} leaseStatus={r.leaseStatus} />
+                  </Td>
+                )}
                 {showSchedule && (
                   <Td onClick={(e) => e.stopPropagation()}>
                     <button
@@ -528,9 +530,9 @@ export default function HorimetrosClient() {
                   </Td>
                 )}
                 {showSchedule && (
-                  <Td className="max-w-[260px] text-gray-600 text-xs" onClick={(e) => e.stopPropagation()}>
+                  <Td className="min-w-[150px] max-w-[320px] text-gray-600 text-xs" onClick={(e) => e.stopPropagation()}>
                     {r.maintenanceScheduledNote ? (
-                      <span className="line-clamp-2" title={r.maintenanceScheduledNote}>{r.maintenanceScheduledNote}</span>
+                      <span className="whitespace-pre-wrap break-words">{r.maintenanceScheduledNote}</span>
                     ) : (
                       <span className="text-gray-300">—</span>
                     )}
@@ -539,7 +541,7 @@ export default function HorimetrosClient() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={showSchedule ? 9 : 7} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
+              <tr><td colSpan={showSchedule ? 8 : 7} className="text-center text-gray-400 py-8">Nenhum equipamento para os filtros selecionados.</td></tr>
             )}
           </tbody>
         </table>
