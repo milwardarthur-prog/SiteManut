@@ -234,10 +234,13 @@ function LeaseBadge({
   status,
   client,
   manual,
+  wrap,
 }: {
   status: Row["leaseStatus"];
   client: string | null;
   manual?: boolean;
+  /** Deixa nomes de cliente longos quebrarem linha (usado só na visão Agendar manutenção). */
+  wrap?: boolean;
 }) {
   if (status === "MANUTENCAO")
     return (
@@ -247,7 +250,11 @@ function LeaseBadge({
     );
   if (status === "LOCADO")
     return (
-      <span className="text-xs px-2 py-0.5 rounded-lg font-medium bg-blue-100 text-blue-800 inline-block max-w-[170px] 2xl:max-w-[230px] break-words">
+      <span
+        className={`text-xs px-2 py-0.5 font-medium bg-blue-100 text-blue-800 ${
+          wrap ? "rounded-lg inline-block max-w-[170px] 2xl:max-w-[230px] break-words" : "rounded-full whitespace-nowrap"
+        }`}
+      >
         {client || "Locado"}
         {manual && <span className="ml-1 text-purple-700" title="Marcado manualmente (sem contrato ativo)">•manual</span>}
       </span>
@@ -492,7 +499,7 @@ export default function HorimetrosClient() {
                 onClick={() => setSelected(r)}
               >
                 <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
-                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} manual={r.locationSource === "MANUAL"} /></Td>
+                <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} manual={r.locationSource === "MANUAL"} wrap={showSchedule} /></Td>
                 <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <QuickReading row={r} onSaved={load} />
