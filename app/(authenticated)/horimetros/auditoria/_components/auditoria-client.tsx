@@ -2,8 +2,10 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, CircleSlash, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, CircleSlash, Loader2, ShieldAlert, Undo2 } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AUDIT_TYPE_LABELS, type AuditType } from "@/lib/horimetro-audit";
 import { COLLECTION_FAIL_LABELS, type CollectionFailReason } from "@/lib/horimetro-coleta";
@@ -17,6 +19,8 @@ type Alert = {
   message: string;
   userIds: string[];
   userNames: string[];
+  key: string;
+  reviewed: { by: string; at: string; note: string | null } | null;
 };
 type UserStats = {
   userId: string;
@@ -58,10 +62,13 @@ export default function AuditoriaClient() {
   const [fUser, setFUser] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<"pending" | "reviewed">("pending");
+  const [refresh, setRefresh] = useState(0);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (refresh === 0) setLoading(true);
     fetch(`/api/horimetros/auditoria?days=${days}`)
       .then(async (res) => {
         if (cancelled) return;
@@ -77,18 +84,45 @@ export default function AuditoriaClient() {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, refresh]);
+
+  // Dá "OK" (ou desfaz) em um ou mais alertas e recarrega a lista.
+  const review = async (keys: string[], undo = false) => {
+    if (keys.length === 0) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/horimetros/auditoria/conferir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys, undo }),
+      });
+      if (!res.ok) {
+        toast.error((await res.json().catch(() => null))?.error ?? "Erro ao registrar.");
+        return;
+      }
+      toast.success(undo ? "Conferência desfeita." : `${keys.length} alerta(s) marcado(s) como conferido(s).`);
+      setRefresh((n) => n + 1);
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pendingCount = alerts.filter((a) => !a.reviewed).length;
+  const reviewedCount = alerts.length - pendingCount;
 
   const filtered = useMemo(() => {
     const t = search.trim().toLowerCase();
     return alerts.filter(
       (a) =>
+        (tab === "reviewed" ? !!a.reviewed : !a.reviewed) &&
         (!fType || a.type === fType) &&
         (!fSeverity || a.severity === fSeverity) &&
         (!fUser || a.userIds.includes(fUser)) &&
         (!t || a.equipmentNumber.toLowerCase().includes(t))
     );
-  }, [alerts, fType, fSeverity, fUser, search]);
+  }, [alerts, tab, fType, fSeverity, fUser, search]);
 
   if (forbidden) {
     return (
@@ -178,7 +212,22 @@ export default function AuditoriaClient() {
 
           <div className="space-y-3">
             <div className="flex flex-wrap items-end gap-3">
-              <h2 className="text-sm font-semibold text-gray-800 mr-2 pb-2">Alertas ({filtered.length})</h2>
+              <div className="flex rounded-md border overflow-hidden mr-2 mb-0.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setTab("pending")}
+                  className={`px-3 py-2 ${tab === "pending" ? "bg-green-500 text-white font-medium" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                >
+                  Pendentes ({pendingCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTab("reviewed")}
+                  className={`px-3 py-2 border-l ${tab === "reviewed" ? "bg-green-500 text-white font-medium" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                >
+                  Conferidos ({reviewedCount})
+                </button>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
                 <select className="border rounded-md px-3 py-2 text-sm bg-white" value={fType} onChange={(e) => setFType(e.target.value)}>
@@ -209,6 +258,20 @@ export default function AuditoriaClient() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Equipamento</label>
                 <Input placeholder="GE-..." value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
+              {tab === "pending" && filtered.length > 0 && (
+                <Button
+                  variant="outline"
+                  className="gap-1.5 mb-0.5"
+                  disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`Marcar os ${filtered.length} alerta(s) listados como conferidos (horímetro certo)?`)) {
+                      review(filtered.map((a) => a.key));
+                    }
+                  }}
+                >
+                  <Check className="w-4 h-4" /> Conferir os {filtered.length} listados
+                </Button>
+              )}
             </div>
 
             <div className="overflow-x-auto rounded-lg border">
@@ -222,6 +285,7 @@ export default function AuditoriaClient() {
                     <th className="px-3 py-2 text-left font-medium">O que foi detectado</th>
                     <th className="px-3 py-2 text-left font-medium">Quem lançou</th>
                     <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Data</th>
+                    <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -245,13 +309,57 @@ export default function AuditoriaClient() {
                             </span>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">{AUDIT_TYPE_LABELS[a.type]}</td>
-                          <td className="px-3 py-2 text-gray-700 min-w-[280px]">{a.message}</td>
+                          <td className="px-3 py-2 text-gray-700 min-w-[280px]">
+                            {a.message}
+                            {a.reviewed && (
+                              <div className="text-xs text-green-700 mt-0.5">
+                                Conferido por {a.reviewed.by} em {fmtDay(a.reviewed.at)}
+                                {a.reviewed.note ? ` — ${a.reviewed.note}` : ""}
+                              </div>
+                            )}
+                          </td>
                           <td className="px-3 py-2 whitespace-nowrap">{a.userNames.join(", ")}</td>
                           <td className="px-3 py-2 whitespace-nowrap">{fmtDay(a.date)}</td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right" onClick={(e) => e.stopPropagation()}>
+                            {a.reviewed ? (
+                              <Button size="sm" variant="outline" className="gap-1" disabled={busy} onClick={() => review([a.key], true)}>
+                                <Undo2 className="w-3.5 h-3.5" /> Desfazer
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                                disabled={busy}
+                                title="Conferi: o horímetro está certo"
+                                onClick={() => review([a.key])}
+                              >
+                                <Check className="w-3.5 h-3.5" /> OK
+                              </Button>
+                            )}
+                          </td>
                         </tr>
                         {isOpen && (
                           <tr className="bg-gray-50/60">
-                            <td colSpan={7} className="px-4 py-3">
+                            <td colSpan={8} className="px-4 py-3 space-y-3">
+                              {!a.reviewed && (
+                                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                                  <Button size="sm" variant="outline" className="gap-1 text-green-700 border-green-300 hover:bg-green-50" disabled={busy} onClick={() => review([a.key])}>
+                                    <Check className="w-3.5 h-3.5" /> Este alerta está certo
+                                  </Button>
+                                  {alerts.filter((x) => x.equipmentId === a.equipmentId && !x.reviewed).length > 1 && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-1 text-green-700 border-green-300 hover:bg-green-50"
+                                      disabled={busy}
+                                      onClick={() => review(alerts.filter((x) => x.equipmentId === a.equipmentId && !x.reviewed).map((x) => x.key))}
+                                    >
+                                      <Check className="w-3.5 h-3.5" /> Os dados de {a.equipmentNumber} estão certos (todos os alertas dela)
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                               <Timeline equipmentId={a.equipmentId} />
                             </td>
                           </tr>
@@ -261,8 +369,8 @@ export default function AuditoriaClient() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center text-gray-400 py-8">
-                        Nenhum alerta para os filtros selecionados.
+                      <td colSpan={8} className="text-center text-gray-400 py-8">
+                        {tab === "reviewed" ? "Nenhum alerta conferido ainda." : "Nenhum alerta pendente para os filtros selecionados."}
                       </td>
                     </tr>
                   )}

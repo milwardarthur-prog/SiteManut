@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { canAudit } from "@/lib/access";
 import { analyzeReadings, buildLeaseHistory } from "@/lib/horimetro-audit";
+import { alertKey, loadReviews } from "@/lib/horimetro-audit-review";
 
 // GET — alertas de auditoria dos lançamentos de horímetro + resumo por usuário.
 export async function GET(req: NextRequest) {
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   const windowDays = [30, 60, 90, 180, 365].includes(requested) ? requested : 90;
 
   try {
-    const [equipments, readings, attempts, imports, users] = await Promise.all([
+    const [equipments, readings, attempts, imports, users, reviews] = await Promise.all([
       prisma.equipment.findMany({
         select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true },
       }),
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.locationImport.findMany({ select: { createdAt: true, summary: true }, orderBy: { createdAt: "asc" } }),
       prisma.user.findMany({ select: { id: true, name: true } }),
+      loadReviews(),
     ]);
 
     const nameOf = new Map(users.map((u) => [u.id, u.name]));
@@ -39,10 +41,22 @@ export async function GET(req: NextRequest) {
       windowDays,
     });
 
+    const withReview = alerts.map((a) => {
+      const key = alertKey(a);
+      return { ...a, key, reviewed: reviews[key] ?? null, userNames: a.userIds.map((id) => nameOf.get(id) ?? "—") };
+    });
+
+    // O contador de alertas altos por usuário só conta os que ainda estão pendentes.
+    const pendingHigh = new Map<string, number>();
+    for (const a of withReview) {
+      if (a.severity !== "ALTA" || a.reviewed) continue;
+      for (const u of a.userIds) pendingHigh.set(u, (pendingHigh.get(u) ?? 0) + 1);
+    }
+
     return NextResponse.json({
       windowDays,
-      users: stats.map((s) => ({ ...s, name: nameOf.get(s.userId) ?? "—" })),
-      alerts: alerts.map((a) => ({ ...a, userNames: a.userIds.map((id) => nameOf.get(id) ?? "—") })),
+      users: stats.map((s) => ({ ...s, highAlerts: pendingHigh.get(s.userId) ?? 0, name: nameOf.get(s.userId) ?? "—" })),
+      alerts: withReview,
     });
   } catch (e) {
     console.error("[horimetros auditoria GET]", e);
