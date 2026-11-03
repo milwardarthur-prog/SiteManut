@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import {
   Gauge,
   Loader2,
@@ -19,6 +20,7 @@ import {
   Wrench,
   History,
   CalendarCheck,
+  ShieldAlert,
   Zap,
   X as XIcon,
 } from "lucide-react";
@@ -54,6 +56,8 @@ import {
 import { toast } from "sonner";
 import { FREQUENCY_LABELS } from "@/lib/horimetro";
 import { decodeCsvBuffer } from "@/lib/csv";
+import { canAudit } from "@/lib/access";
+import { COLLECTION_FAIL_LABELS, COLLECTION_FAIL_REASONS, type CollectionFailReason } from "@/lib/horimetro-coleta";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 type Consumption = {
@@ -96,6 +100,7 @@ type Row = {
   needsSchedule: boolean;
   scheduleReason: "HOURS" | "TIME" | "BOTH" | null;
   lastComment: string | null;
+  lastAttempt: { at: string; reason: CollectionFailReason; note: string | null; by: string } | null;
   loadTest: {
     status: "EM_DIA" | "TESTAR_AGORA" | "EM_ANDAMENTO" | "AGUARDANDO_RETORNO" | "NAO_APLICA";
     lastDate: string | null;
@@ -376,6 +381,13 @@ export default function HorimetrosClient() {
           <Button onClick={() => setManutencaoOpen(true)} variant="outline" className="gap-2 text-red-700 border-red-200 hover:bg-red-50">
             <Wrench className="w-4 h-4" /> Em Manutenção
           </Button>
+          {canAudit((session?.user as any)?.email) && (
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/horimetros/auditoria">
+                <ShieldAlert className="w-4 h-4" /> Auditoria
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -500,7 +512,17 @@ export default function HorimetrosClient() {
               >
                 <Td className="font-medium text-gray-900 whitespace-nowrap">{r.equipmentNumber}</Td>
                 <Td><LeaseBadge status={r.leaseStatus} client={r.currentClient} manual={r.locationSource === "MANUAL"} wrap={showSchedule} /></Td>
-                <Td className="whitespace-nowrap">{fmtDate(r.lastReadingDate)}</Td>
+                <Td className="whitespace-nowrap">
+                  {fmtDate(r.lastReadingDate)}
+                  {r.lastAttempt && (
+                    <div
+                      className="mt-0.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 w-fit"
+                      title={`${COLLECTION_FAIL_LABELS[r.lastAttempt.reason]}${r.lastAttempt.note ? ` — ${r.lastAttempt.note}` : ""} (${r.lastAttempt.by})`}
+                    >
+                      Não coletado {fmtDate(r.lastAttempt.at)}
+                    </div>
+                  )}
+                </Td>
                 <Td className="text-right" onClick={(e) => e.stopPropagation()}>
                   <QuickReading row={r} onSaved={load} />
                 </Td>
@@ -880,10 +902,12 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
   const [value, setValue] = useState("");
   const [warning, setWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [notCollected, setNotCollected] = useState(false);
 
   const reset = () => {
     setValue("");
     setWarning(null);
+    setNotCollected(false);
   };
 
   const submit = async (confirmed: boolean) => {
@@ -934,6 +958,13 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64" onClick={(e) => e.stopPropagation()}>
+        {notCollected ? (
+          <NaoColetadoForm
+            row={row}
+            onCancel={() => setNotCollected(false)}
+            onDone={() => { setOpen(false); reset(); onSaved(); }}
+          />
+        ) : (
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Novo horímetro</label>
@@ -967,7 +998,98 @@ function QuickReading({ row, onSaved }: { row: Row; onSaved: () => void }) {
               </Button>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setNotCollected(true)}
+            className="w-full text-xs text-gray-500 hover:text-amber-700 underline underline-offset-2 text-center"
+          >
+            Não consegui coletar
+          </button>
         </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Registra que não foi possível coletar o horímetro: guarda a tentativa (quem,
+// quando, por quê) e adia a cobrança, sem inventar uma leitura.
+function NaoColetadoForm({ row, onCancel, onDone }: { row: Row; onCancel: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState<CollectionFailReason>("CLIENTE_NAO_INFORMOU");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (reason === "OUTRO" && !note.trim()) {
+      toast.error("Descreva o motivo.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/horimetros/nao-coletado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ equipmentId: row.id, reason, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao registrar.");
+        return;
+      }
+      toast.success(`${row.equipmentNumber}: tentativa registrada. A cobrança volta em 3 dias.`);
+      onDone();
+    } catch {
+      toast.error("Falha de conexão.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+      <div className="text-xs font-medium text-gray-700">{row.equipmentNumber}: por que não coletou?</div>
+      <div className="space-y-1.5">
+        {COLLECTION_FAIL_REASONS.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setReason(r)}
+            className={`w-full text-left text-xs rounded border px-2 py-1.5 ${
+              reason === r ? "border-amber-400 bg-amber-50 text-amber-800 font-medium" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {COLLECTION_FAIL_LABELS[r]}
+          </button>
+        ))}
+      </div>
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={reason === "OUTRO" ? "Descreva (obrigatório)" : "Observação (opcional)"}
+        className="h-8 text-xs"
+      />
+      <p className="text-[11px] text-gray-400">Nenhum horímetro é alterado. Fica registrado quem tentou e quando.</p>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={onCancel} disabled={saving}>Voltar</Button>
+        <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={submit} disabled={saving}>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Registrar"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function NaoColetadoButton({ row, onDone }: { row: Row; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" title="Não consegui coletar" className="text-gray-400 hover:text-amber-600 p-1 rounded">
+          <CircleSlash className="w-4 h-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64">
+        <NaoColetadoForm row={row} onCancel={() => setOpen(false)} onDone={() => { setOpen(false); onDone(); }} />
       </PopoverContent>
     </Popover>
   );
@@ -1107,6 +1229,7 @@ function LancarPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
               <Th className="text-right">Horímetro anterior</Th>
               <Th>Novo horímetro</Th>
               <Th>Observação</Th>
+              <Th></Th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -1133,6 +1256,9 @@ function LancarPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
                     value={notes[r.id] ?? ""}
                     onChange={(e) => setNotes((s) => ({ ...s, [r.id]: e.target.value }))}
                   />
+                </Td>
+                <Td>
+                  <NaoColetadoButton row={r} onDone={onDone} />
                 </Td>
               </tr>
             ))}

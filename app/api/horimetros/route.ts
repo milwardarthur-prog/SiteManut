@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         horimeterReadings: {
           orderBy: { readingDate: "desc" },
           take: window + 1,
-          select: { readingDate: true, value: true },
+          select: { readingDate: true, value: true, createdAt: true },
         },
       },
     });
@@ -56,6 +56,16 @@ export async function GET(req: NextRequest) {
 
     // Problema do equipamento em manutenção = comentário técnico mais recente
     // (o mesmo que o painel externo usa como descrição da manutenção).
+    // Última tentativa de coleta sem sucesso por equipamento (só vale se for
+    // posterior à última leitura real).
+    const attempts = await prisma.horimeterCollectionAttempt.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+      include: { createdBy: { select: { name: true } } },
+    });
+    const lastAttemptByEquipment = new Map<string, (typeof attempts)[number]>();
+    for (const a of attempts) if (!lastAttemptByEquipment.has(a.equipmentId)) lastAttemptByEquipment.set(a.equipmentId, a);
+
     const inMaintenance = equipments.filter((e) => e.leaseStatus === "MANUTENCAO").map((e) => e.id);
     const lastCommentByEquipment = new Map<string, string>();
     if (inMaintenance.length > 0) {
@@ -94,6 +104,13 @@ export async function GET(req: NextRequest) {
         needsSchedule: scheduleReason !== null,
         scheduleReason,
         lastComment: lastCommentByEquipment.get(e.id) ?? null,
+        lastAttempt: (() => {
+          const a = lastAttemptByEquipment.get(e.id);
+          // a tentativa só vale se for posterior ao último lançamento de leitura
+          const lastEntered = Math.max(0, ...(e.horimeterReadings ?? []).map((r) => r.createdAt.getTime()));
+          if (!a || a.createdAt.getTime() <= lastEntered) return null;
+          return { at: a.createdAt, reason: a.reason, note: a.note, by: a.createdBy.name };
+        })(),
         loadTest: classifyLoadTest({
           equipmentNumber: e.equipmentNumber,
           lastTest: lastTests.get(normalizeCode(e.equipmentNumber)) ?? null,

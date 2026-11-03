@@ -101,18 +101,19 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignedOrders    WorkOrder[]          @relation("TechnicianOrders")
-  createdOrders     WorkOrder[]          @relation("CreatorOrders")
-  closedOrders      WorkOrder[]          @relation("CloserOrders")
-  helperRecords     WorkOrderHelper[]
-  authoredComments  WorkOrderComment[]   @relation("CommentAuthor")
-  horimeterReadings HorimeterReading[]   @relation("ReadingAuthor")
-  frequencyChanges  FrequencyChangeLog[] @relation("FreqChangeAuthor")
-  locationImports   LocationImport[]     @relation("ImportAuthor")
-  equipmentComments EquipmentComment[]   @relation("EquipmentCommentAuthor")
-  stockImports      StockImport[]        @relation("StockImportAuthor")
-  pushSubscriptions PushSubscription[]
-  authoredPauses    WorkOrderPause[]     @relation("PauseAuthor")
+  assignedOrders     WorkOrder[]                  @relation("TechnicianOrders")
+  createdOrders      WorkOrder[]                  @relation("CreatorOrders")
+  closedOrders       WorkOrder[]                  @relation("CloserOrders")
+  helperRecords      WorkOrderHelper[]
+  authoredComments   WorkOrderComment[]           @relation("CommentAuthor")
+  horimeterReadings  HorimeterReading[]           @relation("ReadingAuthor")
+  frequencyChanges   FrequencyChangeLog[]         @relation("FreqChangeAuthor")
+  collectionAttempts HorimeterCollectionAttempt[] @relation("AttemptAuthor")
+  locationImports    LocationImport[]             @relation("ImportAuthor")
+  equipmentComments  EquipmentComment[]           @relation("EquipmentCommentAuthor")
+  stockImports       StockImport[]                @relation("StockImportAuthor")
+  pushSubscriptions  PushSubscription[]
+  authoredPauses     WorkOrderPause[]             @relation("PauseAuthor")
 }
 
 // Inscrição de notificação push (Web Push) de um dispositivo do usuário —
@@ -195,11 +196,12 @@ model Equipment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  files             EquipmentFile[]
-  workOrders        WorkOrder[]
-  horimeterReadings HorimeterReading[]
-  frequencyChanges  FrequencyChangeLog[]
-  comments          EquipmentComment[]
+  files              EquipmentFile[]
+  workOrders         WorkOrder[]
+  horimeterReadings  HorimeterReading[]
+  frequencyChanges   FrequencyChangeLog[]
+  comments           EquipmentComment[]
+  collectionAttempts HorimeterCollectionAttempt[]
 
   @@index([equipmentNumber])
   @@index([leaseStatus])
@@ -432,6 +434,22 @@ model HorimeterReading {
 
   @@index([equipmentId])
   @@index([readingDate])
+}
+
+// Tentativa de coleta de horímetro que não deu certo (cliente não informou, sem
+// acesso...). Registra a tentativa sem inventar um valor de leitura.
+model HorimeterCollectionAttempt {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  reason      String // CLIENTE_NAO_INFORMOU | SEM_ACESSO | OUTRO
+  note        String?   @db.Text
+  createdById String
+  createdBy   User      @relation("AttemptAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+
+  @@index([equipmentId])
+  @@index([createdAt])
 }
 
 model FrequencyChangeLog {

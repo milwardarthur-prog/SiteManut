@@ -5,3 +5,11 @@ export const FULL_ACCESS_EMAILS = ["milwardarthur@gmail.com", "manutencao@beltlo
 export function hasFullAccess(email: string | null | undefined): boolean {
   return !!email && FULL_ACCESS_EMAILS.includes(email);
 }
+
+// Quem pode ver a tela de Auditoria dos horímetros (ela audita os lançamentos
+// dos outros usuários, então não fica aberta a todos os gestores).
+export const AUDIT_EMAILS = ["milwardarthur@gmail.com"];
+
+export function canAudit(email: string | null | undefined): boolean {
+  return !!email && AUDIT_EMAILS.includes(email.trim().toLowerCase());
+}
