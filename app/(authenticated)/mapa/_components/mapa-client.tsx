@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Loader2, MapPin, Move, RefreshCw, Search, X } from "lucide-react";
+import { Loader2, MapPin, Move, Pencil, RefreshCw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,9 @@ export default function MapaClient() {
   const [focusKey, setFocusKey] = useState<{ key: string; n: number } | null>(null);
   const [fixDrafts, setFixDrafts] = useState<Record<string, string>>({});
   const [fixing, setFixing] = useState<string | null>(null);
+  // Edição do endereço de um local que já está no mapa (lista lateral).
+  const [editGroup, setEditGroup] = useState<string | null>(null);
+  const [editIds, setEditIds] = useState<string[]>([]);
   const geocodeRunning = useRef(false);
 
   const load = useCallback(async (): Promise<number> => {
@@ -268,8 +271,9 @@ export default function MapaClient() {
       } else if (!data.found) {
         toast.error("Não encontrei esse endereço. Tente outro ou cole as coordenadas do Google Maps.");
       } else {
-        toast.success("Localizado.");
+        toast.success("Endereço salvo.");
         setFixDrafts((s) => ({ ...s, [rowId]: "" }));
+        setEditGroup(null);
         await load();
         setFitSignal((n) => n + 1);
       }
@@ -278,6 +282,16 @@ export default function MapaClient() {
     } finally {
       setFixing(null);
     }
+  };
+
+  const startEdit = (key: string, group: Item[]) => {
+    if (editGroup === key) {
+      setEditGroup(null);
+      return;
+    }
+    setEditGroup(key);
+    setEditIds(group.map((g) => g.id));
+    setFixDrafts((s) => ({ ...s, [`edit:${key}`]: group[0].address ?? "" }));
   };
 
   const hasFilter = !!(clientQ || equipQ || maintQ);
@@ -358,7 +372,7 @@ export default function MapaClient() {
 
       {editMode && (
         <div className="rounded-lg border border-green-200 bg-green-50 text-green-800 text-sm px-3 py-2">
-          Arraste um pino até o lugar certo. A nova posição é salva na hora e vale também nas próximas importações.
+          Arraste um pino até o lugar certo. A nova posição é salva na hora.
         </div>
       )}
 
@@ -386,34 +400,86 @@ export default function MapaClient() {
         <div className="rounded-lg border bg-white lg:h-[65vh] overflow-y-auto divide-y">
           {groups.length === 0 && (
             <div className="p-6 text-center text-sm text-gray-400">
-              {hasFilter ? "Nenhum equipamento com esse filtro." : "Nenhum equipamento locado com posição no mapa."}
+              {hasFilter ? "Nenhum equipamento com esse filtro." : "Nenhum equipamento locado com posição no mapa. Informe o endereço em \"Sem localização\", logo abaixo."}
             </div>
           )}
           {groups
             .slice()
             .sort((a, b) => a.group[0].client.localeCompare(b.group[0].client, "pt-BR"))
-            .map(({ key, group, worst }) => (
-              <button
-                key={key}
-                className="w-full text-left px-3 py-2.5 hover:bg-gray-50"
-                onClick={() => setFocusKey({ key, n: Date.now() })}
-              >
-                <div className="flex items-start gap-2">
-                  <span className="mt-1.5 inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[worst] }} />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {Array.from(new Set(group.map((g) => g.client))).join(" · ")}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">{group[0].address ?? "—"}</div>
-                    <div className="text-xs text-gray-700 mt-0.5 flex flex-wrap gap-x-2">
-                      {group.map((g) => (
-                        <span key={g.id} className="font-mono">{g.equipmentNumber}</span>
-                      ))}
-                    </div>
+            .map(({ key, group, worst }) => {
+              const draftKey = `edit:${key}`;
+              return (
+                <div key={key} className="px-3 py-2.5 hover:bg-gray-50">
+                  <div className="flex items-start gap-2">
+                    <button className="flex-1 min-w-0 text-left" onClick={() => setFocusKey({ key, n: Date.now() })}>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-1.5 inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[worst] }} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {Array.from(new Set(group.map((g) => g.client))).join(" · ")}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">{group[0].address ?? "—"}</div>
+                          <div className="text-xs text-gray-700 mt-0.5 flex flex-wrap gap-x-2">
+                            {group.map((g) => (
+                              <span key={g.id} className="font-mono">{g.equipmentNumber}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      title="Editar endereço"
+                      className={`p-1.5 rounded hover:bg-gray-200 ${editGroup === key ? "text-green-600" : "text-gray-400"}`}
+                      onClick={() => startEdit(key, group)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
                   </div>
+                  {editGroup === key && (
+                    <div className="mt-2 space-y-2 rounded-md border bg-white p-2">
+                      {group.length > 1 && (
+                        <div className="text-xs text-gray-600">
+                          <div className="mb-1">Aplicar a:</div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {group.map((g) => (
+                              <label key={g.id} className="inline-flex items-center gap-1 font-mono">
+                                <input
+                                  type="checkbox"
+                                  checked={editIds.includes(g.id)}
+                                  onChange={(e) =>
+                                    setEditIds((ids) => (e.target.checked ? [...ids, g.id] : ids.filter((x) => x !== g.id)))
+                                  }
+                                />
+                                {g.equipmentNumber}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <Input
+                        placeholder="Endereço completo ou coordenadas"
+                        value={fixDrafts[draftKey] ?? ""}
+                        onChange={(e) => setFixDrafts((s) => ({ ...s, [draftKey]: e.target.value }))}
+                        onKeyDown={(e) => e.key === "Enter" && editIds.length > 0 && fix(draftKey, editIds)}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-green-500 hover:bg-green-600"
+                          disabled={fixing === draftKey || editIds.length === 0 || !(fixDrafts[draftKey] ?? "").trim()}
+                          onClick={() => fix(draftKey, editIds)}
+                        >
+                          {fixing === draftKey ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditGroup(null)}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </button>
-            ))}
+              );
+            })}
         </div>
       </div>
 
@@ -439,8 +505,8 @@ export default function MapaClient() {
             <div>
               <h2 className="text-sm font-semibold text-gray-800">Sem localização ({unlocated.length})</h2>
               <p className="text-xs text-gray-500">
-                O endereço não existe no cadastro ou o OpenStreetMap não achou. Digite um endereço melhor ou cole as
-                coordenadas do Google Maps (clique direito no local → copiar coordenadas).
+                Equipamentos locados sem endereço, ou com um endereço que o OpenStreetMap não achou. Digite o endereço
+                completo ou cole as coordenadas do Google Maps (clique direito no local → copiar coordenadas).
               </p>
             </div>
             {failedCount > 0 && (
@@ -455,7 +521,7 @@ export default function MapaClient() {
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{row.label}</div>
                   <div className="text-xs font-mono text-gray-600">{row.equipments.map((e) => e.equipmentNumber).join(", ")}</div>
-                  <div className="text-xs text-gray-500 truncate">{row.address ? `Endereço atual: ${row.address}` : "Sem endereço no cadastro"}</div>
+                  <div className="text-xs text-gray-500 truncate">{row.address ? `Endereço atual (não encontrado): ${row.address}` : "Sem endereço cadastrado"}</div>
                 </div>
                 <Input
                   placeholder="Endereço completo ou coordenadas (-21.76, -43.35)"

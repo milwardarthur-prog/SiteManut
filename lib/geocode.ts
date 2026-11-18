@@ -4,7 +4,7 @@
 // por isso o resultado de cada endereço é guardado em cache (ver
 // lib/mapa-cache.ts) e nunca é consultado duas vezes.
 //
-// Os endereços vêm do CSV de locação, em texto livre ("HOTEL X: R. Y, 399 -
+// Os endereços são digitados à mão, em texto livre ("HOTEL X: R. Y, 399 -
 // CENTRO, JUIZ DE FORA - MG, 36010-071"). O OpenStreetMap no Brasil nem sempre
 // conhece o número do imóvel (e quase nunca rodovia com KM), então a busca tenta
 // do mais preciso ao mais genérico e devolve o nível de precisão obtido, pro

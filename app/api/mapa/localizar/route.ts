@@ -9,9 +9,9 @@ import { loadGeoCache, saveGeoCache } from "@/lib/mapa-cache";
 const validIds = (v: unknown): v is string[] =>
   Array.isArray(v) && v.length > 0 && v.length <= 100 && v.every((x) => typeof x === "string" && x.length < 60);
 
-// POST — corrige a localização de equipamentos que ficaram sem pino (endereço
-// ausente ou não encontrado). `input` pode ser um endereço novo ou as
-// coordenadas coladas do Google Maps ("-21.76, -43.35").
+// POST — define o endereço de um ou mais equipamentos locados. O endereço é
+// sempre informado à mão (o CSV de locação não traz). `input` pode ser um
+// endereço ou as coordenadas coladas do Google Maps ("-21.76, -43.35").
 export async function POST(req: NextRequest) {
   const auth = await requireFullAccess();
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -23,41 +23,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Informe o endereço ou as coordenadas" }, { status: 400 });
     }
 
-    const cache = await loadGeoCache();
-    const at = new Date().toISOString();
-    const coords = parseCoordinates(input);
-
     // Descobre a posição: coordenadas coladas valem direto; endereço vai pro OpenStreetMap.
+    const coords = parseCoordinates(input);
     let result: GeoResult | null;
     if (coords) {
       result = { lat: coords.lat, lng: coords.lng, precision: "MANUAL" };
     } else {
       try {
-        result = await geocodeAddress(input);
+        // Prazo curto: a Vercel Hobby corta a chamada em ~10 s.
+        result = await geocodeAddress(input, Date.now() + 8500);
       } catch {
-        return NextResponse.json({ error: "O OpenStreetMap não respondeu. Tente de novo em instantes." }, { status: 502 });
+        return NextResponse.json({ error: "O OpenStreetMap demorou a responder. Tente de novo." }, { status: 502 });
       }
     }
+    // Não achou: não mexe no endereço atual, pra a pessoa poder tentar outro texto.
     if (!result) return NextResponse.json({ ok: true, found: false });
 
-    const equipments = await prisma.equipment.findMany({
+    const address = coords ? `${coords.lat}, ${coords.lng}` : input;
+    const cache = await loadGeoCache();
+    cache[normalizeAddress(address)] = { ...result, at: new Date().toISOString() };
+    await prisma.equipment.updateMany({
       where: { id: { in: body.equipmentIds }, leaseStatus: "LOCADO" },
-      select: { id: true, leaseAddress: true },
+      data: { leaseAddress: address },
     });
-    // Quem já tem endereço (do CSV) mantém o texto e a posição fica guardada
-    // nele — assim a correção sobrevive à próxima importação do CSV. Quem não
-    // tem endereço passa a ter o que foi digitado.
-    const withoutAddress: string[] = [];
-    for (const e of equipments) {
-      const key = normalizeAddress(e.leaseAddress);
-      if (key) cache[key] = { ...result, at };
-      else withoutAddress.push(e.id);
-    }
-    if (withoutAddress.length > 0) {
-      const address = coords ? `${coords.lat}, ${coords.lng}` : input;
-      cache[normalizeAddress(address)] = { ...result, at };
-      await prisma.equipment.updateMany({ where: { id: { in: withoutAddress } }, data: { leaseAddress: address } });
-    }
     await saveGeoCache(cache);
     return NextResponse.json({ ok: true, found: true });
   } catch (e) {

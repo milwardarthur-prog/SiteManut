@@ -19,7 +19,6 @@ function pickColumns(fields: string[]): {
   clientCol?: string;
   categoryCol?: string;
   statusCol?: string;
-  addressCol?: string;
 } {
   const norm = (s: string) => normalizeCode(s).toLowerCase();
   let patrimCol: string | undefined;
@@ -27,7 +26,6 @@ function pickColumns(fields: string[]): {
   let obraCol: string | undefined;
   let clientCol: string | undefined;
   let statusCol: string | undefined;
-  let addressCol: string | undefined;
   for (const f of fields) {
     const n = norm(f);
     if (!patrimCol && n.includes("patrim")) patrimCol = f;
@@ -35,13 +33,12 @@ function pickColumns(fields: string[]): {
     if (!obraCol && n.includes("obra")) obraCol = f;
     if (!clientCol && (n.includes("client") || n.includes("local"))) clientCol = f;
     if (!statusCol && n.includes("status")) statusCol = f;
-    if (!addressCol && n.includes("endere")) addressCol = f;
   }
   // Quando existe uma coluna "Patrimônio" separada, ela é o código real do equipamento
   // e "Equipamento" vira apenas a categoria, usada para filtrar só os geradores.
   const eqCol = patrimCol ?? equipCol;
   const categoryCol = patrimCol && equipCol && equipCol !== patrimCol ? equipCol : undefined;
-  return { eqCol, obraCol, clientCol, categoryCol, statusCol, addressCol };
+  return { eqCol, obraCol, clientCol, categoryCol, statusCol };
 }
 
 type PreviewResult = {
@@ -54,7 +51,7 @@ type PreviewResult = {
   duplicates: string[];
   notInBase: string[];
   errorRows: { line: number; message: string }[];
-  leaseList: { equipmentNumber: string; client: string; address: string | null }[];
+  leaseList: { equipmentNumber: string; client: string }[];
 };
 
 async function buildPreview(csv: string): Promise<PreviewResult | { error: string }> {
@@ -64,7 +61,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     transformHeader: (h) => h.trim(),
   });
   const fields = parsed.meta?.fields ?? [];
-  const { eqCol, obraCol, clientCol, categoryCol, statusCol, addressCol } = pickColumns(fields);
+  const { eqCol, obraCol, clientCol, categoryCol, statusCol } = pickColumns(fields);
   if (!eqCol || (!obraCol && !clientCol)) {
     return {
       error:
@@ -83,7 +80,6 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
   const errorRows: { line: number; message: string }[] = [];
   const seen = new Map<string, number>(); // code -> count
   const leaseMap = new Map<string, string>(); // code -> client
-  const addressMap = new Map<string, string>(); // code -> endereço da obra (usado no mapa)
 
   rows.forEach((row, idx) => {
     const line = idx + 2; // +1 header +1 base-1
@@ -118,9 +114,6 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     }
     seen.set(code, (seen.get(code) ?? 0) + 1);
     leaseMap.set(code, client);
-    const address = (addressCol ? row[addressCol] : "")?.trim();
-    if (address) addressMap.set(code, address);
-    else addressMap.delete(code);
   });
 
   const duplicates = Array.from(seen.entries())
@@ -142,7 +135,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
 
   const validLease = Array.from(leaseMap.entries())
     .filter(([code]) => baseSet.has(code) && !protectedCodes.has(code))
-    .map(([equipmentNumber, client]) => ({ equipmentNumber, client, address: addressMap.get(equipmentNumber) ?? null }));
+    .map(([equipmentNumber, client]) => ({ equipmentNumber, client }));
 
   const manualIgnored = Array.from(leaseMap.entries())
     .filter(([code]) => protectedCodes.has(code))
@@ -235,25 +228,31 @@ export async function POST(req: NextRequest) {
       const now = new Date();
       const leaseCodes = new Set(preview.leaseList.map((l) => l.equipmentNumber));
       const clientByCode = new Map(preview.leaseList.map((l) => [l.equipmentNumber, l.client]));
-      const addressByCode = new Map(preview.leaseList.map((l) => [l.equipmentNumber, l.address]));
 
       // Aplica: marca locados os do CSV; disponíveis os demais — exceto os
       // marcados manualmente como locados (sem contrato ativo no relatório),
       // que são preservados em vez de virarem "disponível" automaticamente.
       const allEquip = await prisma.equipment.findMany({
-        select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true },
+        select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true, currentClient: true },
       });
 
       const ops = allEquip.flatMap((e) => {
         const code = normalizeCode(e.equipmentNumber);
         if (leaseCodes.has(code)) {
+          // O endereço do mapa é sempre digitado à mão (o CSV não traz). Ele só é
+          // apagado quando deixa de valer: máquina que acabou de ser locada ou
+          // que mudou de cliente.
+          const newClient = clientByCode.get(code) ?? null;
+          const sameLease =
+            e.leaseStatus === "LOCADO" &&
+            normalizeCode(e.currentClient) === normalizeCode(newClient);
           return [
             prisma.equipment.update({
               where: { id: e.id },
               data: {
                 leaseStatus: "LOCADO",
                 currentClient: clientByCode.get(code) ?? null,
-                leaseAddress: addressByCode.get(code) ?? null,
+                ...(sameLease ? {} : { leaseAddress: null }),
                 location: clientByCode.get(code) ?? "",
                 lastLocationUpdate: now,
                 locationSource: "CSV",
