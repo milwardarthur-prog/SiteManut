@@ -69,6 +69,13 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     };
   }
 
+  // Base de equipamentos cadastrados: usada tanto pra filtrar o mapa de patrimônio
+  // quanto pra conferir as locações no fim.
+  const allEquip = await prisma.equipment.findMany({
+    select: { equipmentNumber: true, leaseStatus: true, locationSource: true },
+  });
+  const baseSet = new Set(allEquip.map((e) => normalizeCode(e.equipmentNumber)));
+
   const rows = parsed.data ?? [];
   const errorRows: { line: number; message: string }[] = [];
   const seen = new Map<string, number>(); // code -> count
@@ -77,11 +84,14 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
   rows.forEach((row, idx) => {
     const line = idx + 2; // +1 header +1 base-1
 
-    // No mapa completo de patrimônio, a maioria das linhas não é gerador
-    // (cabos, tanques, abraçadeiras...) — ignora silenciosamente essas linhas.
+    // No mapa completo de patrimônio, a maioria das linhas não é equipamento
+    // controlado aqui (cabos, bacias, jumpers...) — ignora silenciosamente essas
+    // linhas. Vale a linha cuja categoria é gerador OU cujo código já está
+    // cadastrado (ex.: motosoldador MTS, torre de iluminação TL).
     if (categoryCol) {
       const category = normalizeCode(row[categoryCol]).toLowerCase();
-      if (!category.includes("gerador")) return;
+      const registered = baseSet.has(normalizeCode(row[eqCol!]));
+      if (!category.includes("gerador") && !registered) return;
     }
 
     // Locações encerradas/inativas não contam como "atualmente locado".
@@ -111,11 +121,6 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
     .map(([code]) => code);
 
   // Confere quais códigos existem na base
-  const allEquip = await prisma.equipment.findMany({
-    select: { equipmentNumber: true, leaseStatus: true, locationSource: true },
-  });
-  const baseSet = new Set(allEquip.map((e) => normalizeCode(e.equipmentNumber)));
-
   const notInBase = Array.from(leaseMap.keys()).filter((c) => !baseSet.has(c));
 
   // Locação manual e "em manutenção" são travas: o equipamento só sai delas
