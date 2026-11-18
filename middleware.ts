@@ -8,17 +8,17 @@ export default withAuth(
     const path = req.nextUrl?.pathname ?? "";
 
     // Admin-only routes
-    const adminRoutes = ["/dashboard", "/equipamentos/novo", "/relatorios", "/horimetros"];
+    const adminRoutes = ["/dashboard", "/equipamentos/novo", "/relatorios", "/horimetros", "/mapa"];
     const isAdminRoute = adminRoutes.some((r: string) => path.startsWith(r));
 
     if (isAdminRoute && token?.role !== "ADMIN") {
       return NextResponse.redirect(new URL("/os", req.url));
     }
 
-    // Estoque e Monitoramento são restritos a quem tem acesso total (não
+    // Estoque, Monitoramento e Mapa são restritos a quem tem acesso total (não
     // basta ser ADMIN).
     if (
-      (path.startsWith("/estoque") || path.startsWith("/monitoramento")) &&
+      (path.startsWith("/estoque") || path.startsWith("/monitoramento") || path.startsWith("/mapa")) &&
       !hasFullAccess(token?.email as string | undefined)
     ) {
       return NextResponse.redirect(new URL("/horimetros", req.url));
@@ -45,5 +45,6 @@ export const config = {
     "/scanner/:path*",
     "/estoque/:path*",
     "/monitoramento/:path*",
+    "/mapa/:path*",
   ],
 };

@@ -179,6 +179,9 @@ model Equipment {
   // Locação (separado do status operacional / de OS)
   leaseStatus              LeaseStatus          @default(DISPONIVEL)
   currentClient            String?
+  // Endereço da obra onde o equipamento está locado (vem da coluna "Endereço Obra"
+  // do CSV de locação, ou é informado na Locação Manual). Usado na tela Mapa.
+  leaseAddress             String?
   lastLocationUpdate       DateTime?
   locationSource           ReadingSource?
   // Manutenção preventiva por horímetro

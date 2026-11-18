@@ -120,6 +120,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       }
       data.leaseStatus = status;
       data.currentClient = status === "LOCADO" ? client : null;
+      // Endereço da locação manual (opcional) — é o que posiciona o pino no mapa.
+      data.leaseAddress =
+        status === "LOCADO" && typeof body.manualAddress === "string" && body.manualAddress.trim()
+          ? body.manualAddress.trim().slice(0, 300)
+          : null;
       data.location = status === "LOCADO" ? client : "";
       data.locationSource = "MANUAL";
       data.lastLocationUpdate = new Date();

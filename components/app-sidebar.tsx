@@ -22,6 +22,7 @@ import {
   Kanban,
   LayoutGrid,
   History,
+  MapPin,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ const fullAdminLinks = [
   { href: "/monitoramento", label: "Monitoramento", icon: Kanban },
   { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
   { href: "/horimetros", label: "Horímetros", icon: Gauge },
+  { href: "/mapa", label: "Mapa", icon: MapPin },
   { href: "/estoque", label: "Estoque", icon: Package },
   { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
   { href: "/testes-carga", label: "Testes de Carga", icon: Zap },

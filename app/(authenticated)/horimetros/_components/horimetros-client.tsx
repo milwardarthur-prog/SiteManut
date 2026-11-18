@@ -1428,6 +1428,7 @@ function AjustarDialog({ row, onClose, onSaved }: { row: Row; onClose: () => voi
 function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void }) {
   const [search, setSearch] = useState("");
   const [clientDrafts, setClientDrafts] = useState<Record<string, string>>({});
+  const [addressDrafts, setAddressDrafts] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const manualLocked = useMemo(
@@ -1449,7 +1450,11 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
       const res = await fetch(`/api/horimetros/${row.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manualStatus: client ? "LOCADO" : "DISPONIVEL", manualClient: client }),
+        body: JSON.stringify({
+          manualStatus: client ? "LOCADO" : "DISPONIVEL",
+          manualClient: client,
+          manualAddress: client ? addressDrafts[row.id] ?? "" : "",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1464,6 +1469,7 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
           : `${row.equipmentNumber} liberado.`
       );
       setClientDrafts((s) => ({ ...s, [row.id]: "" }));
+      setAddressDrafts((s) => ({ ...s, [row.id]: "" }));
       onDone();
     } catch {
       toast.error("Falha de conexão.");
@@ -1525,6 +1531,7 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
                 <Th>Equipamento</Th>
                 <Th>Status atual</Th>
                 <Th>Cliente</Th>
+                <Th>Endereço (pro Mapa)</Th>
                 <Th></Th>
               </tr>
             </thead>
@@ -1542,6 +1549,14 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
                     />
                   </Td>
                   <Td>
+                    <Input
+                      className="w-64"
+                      placeholder="Opcional — rua, nº, cidade, UF"
+                      value={addressDrafts[r.id] ?? ""}
+                      onChange={(e) => setAddressDrafts((s) => ({ ...s, [r.id]: e.target.value }))}
+                    />
+                  </Td>
+                  <Td>
                     <Button
                       size="sm"
                       className="bg-green-500 hover:bg-green-600 gap-1"
@@ -1554,7 +1569,7 @@ function LocacaoManualPanel({ rows, onDone }: { rows: Row[]; onDone: () => void 
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={4} className="text-center text-gray-400 py-6">Nenhum equipamento encontrado.</td></tr>
+                <tr><td colSpan={5} className="text-center text-gray-400 py-6">Nenhum equipamento encontrado.</td></tr>
               )}
             </tbody>
           </table>
