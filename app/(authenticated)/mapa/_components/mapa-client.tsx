@@ -25,7 +25,7 @@ type Item = {
   model: string | null;
   client: string;
   address: string | null;
-  state: "LOCALIZADO" | "PENDENTE" | "NAO_ACHADO" | "SEM_ENDERECO";
+  state: "LOCALIZADO" | "PENDENTE" | "NAO_ACHADO" | "SO_CIDADE" | "SEM_ENDERECO";
   lat: number | null;
   lng: number | null;
   precision: "EXATO" | "RUA" | "CEP" | "CIDADE" | "MANUAL" | null;
@@ -222,11 +222,20 @@ export default function MapaClient() {
 
   // Equipamentos sem posição: sem endereço, ou endereço que o mapa não achou.
   const unlocated = useMemo(() => {
-    const rows = new Map<string, { id: string; label: string; equipments: Item[]; address: string | null }>();
+    const rows = new Map<
+      string,
+      { id: string; label: string; equipments: Item[]; address: string | null; onlyCity: boolean }
+    >();
     for (const i of filtered) {
-      if (i.state !== "NAO_ACHADO" && i.state !== "SEM_ENDERECO") continue;
-      const key = i.state === "NAO_ACHADO" ? `a:${i.address}` : `e:${i.id}`;
-      const row = rows.get(key) ?? { id: key, label: i.client, equipments: [], address: i.address };
+      if (i.state !== "NAO_ACHADO" && i.state !== "SO_CIDADE" && i.state !== "SEM_ENDERECO") continue;
+      const key = i.state === "SEM_ENDERECO" ? `e:${i.id}` : `a:${i.address}:${i.client}`;
+      const row = rows.get(key) ?? {
+        id: key,
+        label: i.client,
+        equipments: [],
+        address: i.address,
+        onlyCity: i.state === "SO_CIDADE",
+      };
       row.equipments.push(i);
       rows.set(key, row);
     }
@@ -505,8 +514,9 @@ export default function MapaClient() {
             <div>
               <h2 className="text-sm font-semibold text-gray-800">Sem localização ({unlocated.length})</h2>
               <p className="text-xs text-gray-500">
-                Equipamentos locados sem endereço, ou com um endereço que o OpenStreetMap não achou. Digite o endereço
-                completo ou cole as coordenadas do Google Maps (clique direito no local → copiar coordenadas).
+                Equipamentos locados sem endereço, ou com um endereço que o OpenStreetMap não achou direito (só a cidade).
+                Digite o endereço completo ou cole as coordenadas do Google Maps (clique direito no local → copiar
+                coordenadas).
               </p>
             </div>
             {failedCount > 0 && (
@@ -521,7 +531,9 @@ export default function MapaClient() {
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-gray-900 truncate">{row.label}</div>
                   <div className="text-xs font-mono text-gray-600">{row.equipments.map((e) => e.equipmentNumber).join(", ")}</div>
-                  <div className="text-xs text-gray-500 truncate">{row.address ? `Endereço atual (não encontrado): ${row.address}` : "Sem endereço cadastrado"}</div>
+                  <div className="text-xs text-gray-500 truncate">{row.address
+                      ? `${row.onlyCity ? "Só a cidade foi encontrada (posição imprecisa)" : "Endereço não encontrado"}: ${row.address}`
+                      : "Sem endereço cadastrado"}</div>
                 </div>
                 <Input
                   placeholder="Endereço completo ou coordenadas (-21.76, -43.35)"

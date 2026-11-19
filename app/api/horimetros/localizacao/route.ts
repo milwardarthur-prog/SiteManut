@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { normalizeCode } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
 import { RETURN_CONFERENCE_NOTE } from "@/lib/retorno-locacao";
+import { sameClientName } from "@/lib/client-name";
 
 // Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
 // Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
@@ -243,9 +244,7 @@ export async function POST(req: NextRequest) {
           // apagado quando deixa de valer: máquina que acabou de ser locada ou
           // que mudou de cliente.
           const newClient = clientByCode.get(code) ?? null;
-          const sameLease =
-            e.leaseStatus === "LOCADO" &&
-            normalizeCode(e.currentClient) === normalizeCode(newClient);
+          const sameLease = e.leaseStatus === "LOCADO" && sameClientName(e.currentClient, newClient);
           return [
             prisma.equipment.update({
               where: { id: e.id },

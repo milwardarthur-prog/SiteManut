@@ -17,5 +17,12 @@ export function decodeCsvBuffer(buf: ArrayBuffer): string {
   if (sampleLen > 0 && zeroCount / sampleLen > 0.25) {
     return new TextDecoder("utf-16le").decode(bytes);
   }
-  return new TextDecoder("utf-8").decode(bytes);
+  // Sem BOM: tenta UTF-8 estrito. Se o arquivo não for UTF-8 válido, é o
+  // Windows-1252/Latin-1 que o sistema de patrimônio exporta — e ler isso como
+  // UTF-8 trocaria cada acento por "�" (ex.: "SERVI�OS").
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
 }
