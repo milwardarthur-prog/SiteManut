@@ -10,7 +10,10 @@
 // do mais preciso ao mais genérico e devolve o nível de precisão obtido, pro
 // mapa avisar quando o pino é só aproximado.
 
-export type GeoPrecision = "EXATO" | "RUA" | "CEP" | "CIDADE" | "MANUAL";
+// RODOVIA: só a rodovia foi encontrada, sem o km — o ponto devolvido é um trecho
+// qualquer dela, então não serve pra posicionar o equipamento. CIDADE: só o
+// centro da cidade. Os dois ficam fora do mapa (lista "Sem localização").
+export type GeoPrecision = "EXATO" | "RUA" | "CEP" | "CIDADE" | "RODOVIA" | "MANUAL";
 export type GeoResult = { lat: number; lng: number; precision: GeoPrecision };
 
 const UF_NAMES: Record<string, string> = {
@@ -147,7 +150,19 @@ async function pace() {
   lastRequestAt = Date.now();
 }
 
-type NominatimHit = { lat: string; lon: string; address?: Record<string, string> };
+type NominatimHit = {
+  lat: string;
+  lon: string;
+  type?: string;
+  addresstype?: string;
+  address?: Record<string, string>;
+};
+
+// Resultado que é a própria cidade/estado (e não uma rua ou um CEP): o
+// OpenStreetMap devolve isso quando não conhece o que foi pedido.
+const isAdministrative = (hit: NominatimHit) =>
+  hit.type === "administrative" ||
+  ["city", "town", "municipality", "state", "county", "village", "region"].includes(hit.addresstype ?? "");
 
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -215,21 +230,25 @@ export async function geocodeAddress(raw: string, deadline?: number): Promise<Ge
   if (a.city) place.city = a.city;
   if (state) place.state = state;
   const hasStreet = !!a.street && !/^\d+$/.test(a.street);
+  const isHighway = /^(BR|MG)-[0-9]+$/.test(a.street);
 
   // 1) rua + número
   if (hasStreet && a.number && a.city) {
     const hit = await search({ ...place, street: `${a.number} ${a.street}` }, state, deadline);
-    if (hit) return toResult(hit, hit.address?.house_number ? "EXATO" : "RUA");
+    if (hit && !isAdministrative(hit)) {
+      return toResult(hit, isHighway ? "RODOVIA" : hit.address?.house_number ? "EXATO" : "RUA");
+    }
   }
   // 2) só a rua / rodovia
   if (hasStreet && a.city) {
     const hit = await search({ ...place, street: a.street }, state, deadline);
-    if (hit) return toResult(hit, "RUA");
+    if (hit && !isAdministrative(hit)) return toResult(hit, isHighway ? "RODOVIA" : "RUA");
   }
   // 3) CEP
   if (a.cep) {
     const hit = await search({ ...place, postalcode: a.cep }, state, deadline);
-    if (hit) return toResult(hit, "CEP");
+    // Só vale se o OpenStreetMap realmente conhece esse CEP; senão ele devolve a cidade.
+    if (hit && (hit.type === "postcode" || hit.addresstype === "postcode")) return toResult(hit, "CEP");
   }
   // 4) cidade (aproximado)
   if (a.city) {

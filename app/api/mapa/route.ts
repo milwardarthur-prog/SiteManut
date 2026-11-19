@@ -42,12 +42,12 @@ export async function GET() {
       const entry = addressKey ? cache[addressKey] : undefined;
 
       // LOCALIZADO (tem coordenadas) | PENDENTE (ainda vai buscar) |
-      // NAO_ACHADO (a busca não achou) | SO_CIDADE (só achou o centro da cidade —
-      // não vai pro mapa, senão vários equipamentos de endereços diferentes ficam
-      // empilhados no mesmo ponto) | SEM_ENDERECO
-      let state: "LOCALIZADO" | "PENDENTE" | "NAO_ACHADO" | "SO_CIDADE" | "SEM_ENDERECO";
+      // NAO_ACHADO (a busca não achou) | IMPRECISO (só achou o centro da cidade ou
+      // um trecho da rodovia — não vai pro mapa, senão vários equipamentos de
+      // endereços diferentes ficam empilhados no mesmo ponto) | SEM_ENDERECO
+      let state: "LOCALIZADO" | "PENDENTE" | "NAO_ACHADO" | "IMPRECISO" | "SEM_ENDERECO";
       if (!addressKey) state = "SEM_ENDERECO";
-      else if (isFound(entry) && entry.precision === "CIDADE") state = "SO_CIDADE";
+      else if (isFound(entry) && (entry.precision === "CIDADE" || entry.precision === "RODOVIA")) state = "IMPRECISO";
       else if (isFound(entry)) state = "LOCALIZADO";
       else if (entry) state = "NAO_ACHADO";
       else {
