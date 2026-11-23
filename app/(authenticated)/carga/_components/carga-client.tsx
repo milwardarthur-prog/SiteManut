@@ -67,7 +67,9 @@ function itemColor(code: string): string {
   return "#2563eb";
 }
 
-export default function CargaClient() {
+// readOnly: versão pública (aba do painel estático) — só consulta e monta a carga; veículos,
+// medidas e pesos se editam no SiteManut. Não mostra cliente nem status de locação.
+export default function CargaClient({ readOnly = false }: { readOnly?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -85,7 +87,7 @@ export default function CargaClient() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/carga");
+      const res = await fetch(readOnly ? "/api/public/carga" : "/api/carga");
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Erro ao carregar");
@@ -100,7 +102,7 @@ export default function CargaClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [readOnly]);
   useEffect(() => {
     load();
   }, [load]);
@@ -435,8 +437,12 @@ export default function CargaClient() {
       return;
     }
     if (!hasDims(eq)) {
-      setEditEqId(eq.id);
-      toast.info("Informe as medidas deste equipamento para colocá-lo na carga.");
+      if (readOnly) {
+        toast.info(`${eq.equipmentNumber} ainda não tem medidas cadastradas. Cadastre no SiteManut.`);
+      } else {
+        setEditEqId(eq.id);
+        toast.info("Informe as medidas deste equipamento para colocá-lo na carga.");
+      }
       return;
     }
     const uid = `${eq.id}-${Date.now()}`;
@@ -640,19 +646,27 @@ export default function CargaClient() {
               ))}
             </select>
           </div>
-          <Button variant="outline" className="gap-1" onClick={() => setVehicleDialog(true)}>
-            <Pencil className="w-4 h-4" /> Veículos
-          </Button>
+          {!readOnly && (
+            <Button variant="outline" className="gap-1" onClick={() => setVehicleDialog(true)}>
+              <Pencil className="w-4 h-4" /> Veículos
+            </Button>
+          )}
         </div>
       </div>
 
       {!vehicle ? (
         <div className="rounded-lg border bg-white p-10 text-center">
           <Truck className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-600 mb-3">Cadastre o primeiro veículo, com as medidas da carroceria, para começar.</p>
-          <Button className="bg-green-500 hover:bg-green-600" onClick={() => setVehicleDialog(true)}>
-            Cadastrar veículo
-          </Button>
+          <p className="text-sm text-gray-600 mb-3">
+            {readOnly
+              ? "Nenhum veículo cadastrado ainda. O cadastro é feito no SiteManut."
+              : "Cadastre o primeiro veículo, com as medidas da carroceria, para começar."}
+          </p>
+          {!readOnly && (
+            <Button className="bg-green-500 hover:bg-green-600" onClick={() => setVehicleDialog(true)}>
+              Cadastrar veículo
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -661,7 +675,7 @@ export default function CargaClient() {
             <div className="p-3 border-b space-y-2">
               <div className="relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input className="pl-9" placeholder="Buscar equipamento ou cliente" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input className="pl-9" placeholder={readOnly ? "Buscar equipamento" : "Buscar equipamento ou cliente"} value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <label className="flex items-center gap-2 text-xs text-gray-600">
                 <input type="checkbox" checked={onlyWithDims} onChange={(e) => setOnlyWithDims(e.target.checked)} />
@@ -674,8 +688,10 @@ export default function CargaClient() {
                 return (
                   <div key={e.id} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
                     <span
-                      className={`w-2 h-2 rounded-full shrink-0 ${e.leaseStatus ? STATUS_DOT[e.leaseStatus] : "bg-teal-500"}`}
-                      title={e.leaseStatus ? STATUS_LABEL[e.leaseStatus] : "Bacia / item extra"}
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        e.leaseStatus ? STATUS_DOT[e.leaseStatus] : isBasinEq(e) ? "bg-teal-500" : "bg-gray-300"
+                      }`}
+                      title={e.leaseStatus ? STATUS_LABEL[e.leaseStatus] : isBasinEq(e) ? "Bacia" : undefined}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-gray-900 font-mono truncate">{e.equipmentNumber}</div>
@@ -686,9 +702,11 @@ export default function CargaClient() {
                         {e.client ? ` · ${e.client}` : ""}
                       </div>
                     </div>
-                    <button className="p-1.5 rounded text-gray-400 hover:bg-gray-200" title="Medidas e peso" onClick={() => setEditEqId(e.id)}>
-                      <Pencil className="w-4 h-4" />
-                    </button>
+                    {!readOnly && (
+                      <button className="p-1.5 rounded text-gray-400 hover:bg-gray-200" title="Medidas e peso" onClick={() => setEditEqId(e.id)}>
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
                     {used ? (
                       <span className="text-xs text-green-600 font-medium px-1">na carga</span>
                     ) : (
@@ -1021,7 +1039,7 @@ export default function CargaClient() {
         </div>
       )}
 
-      {vehicleDialog && (
+      {!readOnly && vehicleDialog && (
         <VehiclesDialog
           initial={vehicles}
           onClose={() => setVehicleDialog(false)}
@@ -1031,7 +1049,7 @@ export default function CargaClient() {
           }}
         />
       )}
-      {editEqId && eqById.get(editEqId) && (
+      {!readOnly && editEqId && eqById.get(editEqId) && (
         <EquipmentDialog
           eq={eqById.get(editEqId)!}
           onClose={() => setEditEqId(null)}
