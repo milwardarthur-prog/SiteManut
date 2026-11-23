@@ -23,6 +23,7 @@ import {
   LayoutGrid,
   History,
   MapPin,
+  Truck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const fullAdminLinks = [
   { href: "/equipamentos", label: "Equipamentos", icon: Wrench },
   { href: "/horimetros", label: "Horímetros", icon: Gauge },
   { href: "/mapa", label: "Mapa", icon: MapPin },
+  { href: "/carga", label: "Montar carga", icon: Truck },
   { href: "/estoque", label: "Estoque", icon: Package },
   { href: "/checklist", label: "Checklist", icon: ClipboardCheck },
   { href: "/testes-carga", label: "Testes de Carga", icon: Zap },
