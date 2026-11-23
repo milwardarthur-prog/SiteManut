@@ -53,6 +53,13 @@ function basinFit(g: Eq, b: Eq): boolean | null {
 const itemSize = (e: Eq, rotated: boolean) =>
   rotated ? { w: e.widthM as number, h: e.lengthM as number } : { w: e.lengthM as number, h: e.widthM as number };
 
+/** Tamanho (em tela, em metros) do gerador dentro da bacia: acompanha o giro da bacia. */
+function genScreenDims(basin: Item, gen: Item, ge: Eq) {
+  const w0 = gen.inRot ? ge.widthM! : ge.lengthM!;
+  const h0 = gen.inRot ? ge.lengthM! : ge.widthM!;
+  return basin.rotated ? { gw: h0, gh: w0 } : { gw: w0, gh: h0 };
+}
+
 function itemColor(code: string): string {
   if (code.startsWith("BC")) return "#0d9488";
   if (code.startsWith("MTS")) return "#ea580c";
@@ -214,6 +221,94 @@ export default function CargaClient() {
       }
     }
     setDrag(null);
+  };
+
+  // ── gerador dentro da bacia: arrastar ──
+  // 1 clique e arrasta: leva só o gerador (sai da bacia; se soltar em cima de uma bacia, entra nela).
+  // 2 cliques (o 2º segurando) e arrasta: leva a bacia junto com o gerador.
+  const genGesture = useRef<{ uid: string; sx: number; sy: number; ox: number; oy: number; moved: boolean; unit: boolean } | null>(null);
+  const lastGenTap = useRef<{ uid: string; t: number } | null>(null);
+  const [genDrag, setGenDrag] = useState<{ uid: string; x: number; y: number } | null>(null);
+
+  const onGenDown = (e: React.PointerEvent, gen: Item, basin: Item, basinRect: Rect) => {
+    e.stopPropagation();
+    const ge = eqById.get(gen.eqId);
+    if (!ge || !hasDims(ge)) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const tap = lastGenTap.current;
+    const unit = !!tap && tap.uid === gen.uid && Date.now() - tap.t < 450;
+    lastGenTap.current = null;
+    if (unit) {
+      genGesture.current = { uid: gen.uid, sx: e.clientX, sy: e.clientY, ox: 0, oy: 0, moved: false, unit: true };
+      onPointerDown(e, basin);
+      return;
+    }
+    const { gw, gh } = genScreenDims(basin, gen, ge);
+    genGesture.current = {
+      uid: gen.uid,
+      sx: e.clientX,
+      sy: e.clientY,
+      ox: basinRect.x + (basinRect.w - gw) / 2,
+      oy: basinRect.y + (basinRect.h - gh) / 2,
+      moved: false,
+      unit: false,
+    };
+    setSelected(gen.uid);
+  };
+
+  const onGenMove = (e: React.PointerEvent, gen: Item, basin: Item) => {
+    const g = genGesture.current;
+    if (!g || g.uid !== gen.uid) return;
+    if (g.unit) {
+      onPointerMove(e, basin);
+      return;
+    }
+    const dx = (e.clientX - g.sx) / scale;
+    const dy = (e.clientY - g.sy) / scale;
+    if (!g.moved && Math.hypot(dx, dy) * scale < 3) return;
+    g.moved = true;
+    setGenDrag({ uid: gen.uid, x: g.ox + dx, y: g.oy + dy });
+  };
+
+  const onGenUp = (gen: Item, basin: Item) => {
+    const g = genGesture.current;
+    genGesture.current = null;
+    if (!g || g.uid !== gen.uid) return;
+    if (g.unit) {
+      onPointerUp(basin);
+      return;
+    }
+    const drop = genDrag;
+    setGenDrag(null);
+    if (!g.moved || !drop || drop.uid !== gen.uid) {
+      // só um clique: guarda o instante, pra detectar o "2 cliques e arrasta"
+      lastGenTap.current = { uid: gen.uid, t: Date.now() };
+      return;
+    }
+    const ge = eqById.get(gen.eqId);
+    if (!ge || !hasDims(ge) || !bed) return;
+    const { gw, gh } = genScreenDims(basin, gen, ge);
+    const cx = drop.x + gw / 2;
+    const cy = drop.y + gh / 2;
+    // soltou com o centro em cima de uma bacia: entra nela (a mesma = fica onde estava)
+    const over = items.find((b) => {
+      const br = rectOf(b);
+      return b.uid !== gen.uid && isBasinEq(eqById.get(b.eqId)) && br && cx >= br.x && cx <= br.x + br.w && cy >= br.y && cy <= br.y + br.h;
+    });
+    if (over) {
+      if (over.uid !== basin.uid) nestInto(gen, ge, over.uid);
+      return;
+    }
+    const r = { x: drop.x, y: drop.y, w: gw, h: gh };
+    if (isValidPlacement(r, placedRects(), bed)) {
+      const rotatedFlag = !!gen.inRot !== !!basin.rotated;
+      setItems((all) =>
+        all.map((i) => (i.uid === gen.uid ? { ...i, inBasin: undefined, inRot: undefined, x: drop.x, y: drop.y, rotated: rotatedFlag } : i))
+      );
+      setSelected(gen.uid);
+    } else {
+      toast.error("Aí não dá: bate em outro equipamento ou passa da carroceria. O gerador ficou na bacia.");
+    }
   };
 
   // ── ações ──
@@ -761,19 +856,17 @@ export default function CargaClient() {
                           )}
                           {nestedHere && ne && hasDims(ne) && (() => {
                             // gerador dentro da bacia, centralizado; acompanha o giro da bacia
-                            const w0 = nestedHere.inRot ? ne.widthM! : ne.lengthM!;
-                            const h0 = nestedHere.inRot ? ne.lengthM! : ne.widthM!;
-                            const gw = it.rotated ? h0 : w0;
-                            const gh = it.rotated ? w0 : h0;
+                            const { gw, gh } = genScreenDims(it, nestedHere, ne);
+                            const lifted = genDrag?.uid === nestedHere.uid;
                             return (
                               <div
-                                onPointerDown={(ev) => {
-                                  ev.stopPropagation();
-                                  setSelected(nestedHere.uid);
-                                }}
-                                className={`absolute rounded-sm flex flex-col items-center justify-center text-center leading-tight cursor-pointer ${
+                                onPointerDown={(ev) => onGenDown(ev, nestedHere, it, base)}
+                                onPointerMove={(ev) => onGenMove(ev, nestedHere, it)}
+                                onPointerUp={() => onGenUp(nestedHere, it)}
+                                onDoubleClick={(ev) => ev.stopPropagation()}
+                                className={`absolute rounded-sm flex flex-col items-center justify-center text-center leading-tight cursor-grab select-none ${
                                   selected === nestedHere.uid ? "ring-2 ring-gray-900" : ""
-                                }`}
+                                } ${lifted ? "opacity-30" : ""}`}
                                 style={{
                                   left: ((r.w - gw) / 2) * scale,
                                   top: ((r.h - gh) / 2) * scale + 6,
@@ -781,8 +874,9 @@ export default function CargaClient() {
                                   height: gh * scale,
                                   background: itemColor(ne.equipmentNumber),
                                   border: "1px solid rgba(255,255,255,.85)",
+                                  touchAction: "none",
                                 }}
-                                title={`${ne.equipmentNumber} sobre a bacia ${e.equipmentNumber}${ne.weightKg != null ? ` · ${fmtKg(ne.weightKg)}` : ""}`}
+                                title={`${ne.equipmentNumber} sobre a bacia ${e.equipmentNumber}${ne.weightKg != null ? ` · ${fmtKg(ne.weightKg)}` : ""} · arraste: só o gerador · 2 cliques e arraste: gerador + bacia`}
                               >
                                 <span className="text-[11px] font-bold px-0.5">{ne.equipmentNumber}</span>
                                 {gw * scale > 70 && gh * scale > 30 && (
@@ -794,6 +888,40 @@ export default function CargaClient() {
                         </div>
                       );
                     })}
+                    {genDrag && (() => {
+                      const gi = items.find((i) => i.uid === genDrag.uid);
+                      const ge = gi && eqById.get(gi.eqId);
+                      const bi = gi?.inBasin ? items.find((i) => i.uid === gi.inBasin) : undefined;
+                      if (!gi || !ge || !bi || !hasDims(ge) || !bed) return null;
+                      const { gw, gh } = genScreenDims(bi, gi, ge);
+                      const cx = genDrag.x + gw / 2;
+                      const cy = genDrag.y + gh / 2;
+                      const over = items.find((b) => {
+                        const br = rectOf(b);
+                        return b.uid !== gi.uid && isBasinEq(eqById.get(b.eqId)) && br && cx >= br.x && cx <= br.x + br.w && cy >= br.y && cy <= br.y + br.h;
+                      });
+                      const overEq = over && eqById.get(over.eqId);
+                      const ok = over
+                        ? over.uid === bi.uid || (!items.some((i) => i.inBasin === over.uid) && !!overEq && basinFit(ge, overEq) !== null)
+                        : isValidPlacement({ x: genDrag.x, y: genDrag.y, w: gw, h: gh }, placedRects(), bed);
+                      return (
+                        <div
+                          className="absolute rounded-sm text-white flex items-center justify-center text-[11px] font-bold pointer-events-none z-30"
+                          style={{
+                            left: genDrag.x * scale,
+                            top: genDrag.y * scale,
+                            width: gw * scale,
+                            height: gh * scale,
+                            background: ok ? itemColor(ge.equipmentNumber) : "#dc2626",
+                            opacity: 0.9,
+                            outline: over && ok ? "3px solid #0d9488" : undefined,
+                            border: "1px solid rgba(255,255,255,.85)",
+                          }}
+                        >
+                          {ge.equipmentNumber}
+                        </div>
+                      );
+                    })()}
                     {items.length === 0 && (
                       <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
                         Adicione equipamentos pela lista à esquerda
@@ -801,7 +929,7 @@ export default function CargaClient() {
                     )}
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1 pl-4">Cada quadradinho = 1 m · duplo clique gira 90° (a bacia leva o gerador junto) · tecla R gira · Delete tira · solte o gerador em cima da bacia para colocá-lo dentro</div>
+                <div className="text-[10px] text-gray-400 mt-1 pl-4">Cada quadradinho = 1 m · duplo clique gira 90° · tecla R gira · Delete tira · gerador na bacia: arraste para mover só o gerador, ou dê 2 cliques (segurando no 2º) e arraste para levar bacia + gerador · solte o gerador em cima de uma bacia para colocá-lo dentro</div>
               </div>
             </div>
 
