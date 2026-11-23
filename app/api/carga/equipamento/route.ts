@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireFullAccess } from "@/lib/require-admin";
 import { formatMeters } from "@/lib/carga";
-import { loadWeights, saveWeights } from "@/lib/carga-store";
+import { loadExtras, loadWeights, saveExtras, saveWeights } from "@/lib/carga-store";
 
 const num = (v: unknown): number | null | undefined => {
   if (v === undefined) return undefined; // não informado: não mexe
@@ -40,14 +40,25 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const eq = await prisma.equipment.findUnique({ where: { id }, select: { id: true } });
-    if (!eq) return NextResponse.json({ error: "Equipamento não encontrado" }, { status: 404 });
+    if (id.startsWith("extra:")) {
+      // Item extra (ex.: bacia): as medidas ficam junto da própria lista de extras.
+      const extras = await loadExtras();
+      const item = extras.find((x) => x.id === id);
+      if (!item) return NextResponse.json({ error: "Item não encontrado" }, { status: 404 });
+      if (lengthM !== undefined) item.lengthM = lengthM;
+      if (widthM !== undefined) item.widthM = widthM;
+      if (heightM !== undefined) item.heightM = heightM;
+      if (lengthM !== undefined || widthM !== undefined || heightM !== undefined) await saveExtras(extras);
+    } else {
+      const eq = await prisma.equipment.findUnique({ where: { id }, select: { id: true } });
+      if (!eq) return NextResponse.json({ error: "Equipamento não encontrado" }, { status: 404 });
 
-    const data: { depth?: string | null; width?: string | null; height?: string | null } = {};
-    if (lengthM !== undefined) data.depth = lengthM === null ? null : formatMeters(lengthM);
-    if (widthM !== undefined) data.width = widthM === null ? null : formatMeters(widthM);
-    if (heightM !== undefined) data.height = heightM === null ? null : formatMeters(heightM);
-    if (Object.keys(data).length > 0) await prisma.equipment.update({ where: { id }, data });
+      const data: { depth?: string | null; width?: string | null; height?: string | null } = {};
+      if (lengthM !== undefined) data.depth = lengthM === null ? null : formatMeters(lengthM);
+      if (widthM !== undefined) data.width = widthM === null ? null : formatMeters(widthM);
+      if (heightM !== undefined) data.height = heightM === null ? null : formatMeters(heightM);
+      if (Object.keys(data).length > 0) await prisma.equipment.update({ where: { id }, data });
+    }
 
     if (weightKg !== undefined) {
       const weights = await loadWeights();

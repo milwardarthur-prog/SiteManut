@@ -42,10 +42,26 @@ export function formatMeters(n: number): string {
 export const overlaps = (a: Rect, b: Rect) =>
   a.x < b.x + b.w - EPS && a.x + a.w > b.x + EPS && a.y < b.y + b.h - EPS && a.y + a.h > b.y + EPS;
 
-export const insideBed = (r: Rect, bed: { lengthM: number; widthM: number }) =>
-  r.x >= -EPS && r.y >= -EPS && r.x + r.w <= bed.lengthM + EPS && r.y + r.h <= bed.widthM + EPS;
+/**
+ * Carroceria. `overhangM` (opcional) é quanto a carga pode passar pra fora, em
+ * metros: pra trás (fundo) e pros lados. Pra frente (cabine) nunca passa.
+ */
+export type Bed = { lengthM: number; widthM: number; overhangM?: number };
 
-export function isValidPlacement(r: Rect, others: Rect[], bed: { lengthM: number; widthM: number }): boolean {
+export const insideBed = (r: Rect, bed: Bed) => {
+  const o = bed.overhangM ?? 0;
+  return r.x >= -EPS && r.y >= -o - EPS && r.x + r.w <= bed.lengthM + o + EPS && r.y + r.h <= bed.widthM + o + EPS;
+};
+
+/** Quanto do retângulo passa da carroceria (m): fundo e cada lado. */
+export function overhangOf(r: Rect, bed: { lengthM: number; widthM: number }) {
+  const rear = Math.max(0, r.x + r.w - bed.lengthM);
+  const sideA = Math.max(0, -r.y);
+  const sideB = Math.max(0, r.y + r.h - bed.widthM);
+  return { rear, sideA, sideB, any: rear > EPS || sideA > EPS || sideB > EPS };
+}
+
+export function isValidPlacement(r: Rect, others: Rect[], bed: Bed): boolean {
   return insideBed(r, bed) && !others.some((o) => overlaps(r, o));
 }
 
@@ -56,7 +72,7 @@ export function isValidPlacement(r: Rect, others: Rect[], bed: { lengthM: number
 export function findSpot(
   size: { w: number; h: number },
   placed: Rect[],
-  bed: { lengthM: number; widthM: number },
+  bed: Bed,
   allowRotate = true
 ): { x: number; y: number; rotated: boolean } | null {
   const candidates: { x: number; y: number }[] = [{ x: 0, y: 0 }];
@@ -89,7 +105,7 @@ export type PackItem = { id: string; w: number; h: number; weightKg: number };
 export type Placed = { id: string; x: number; y: number; rotated: boolean; w: number; h: number };
 
 /** Uma tentativa de arranjo numa ordem dada (respeitando o limite de peso, se houver). */
-function packInOrder(items: PackItem[], bed: { lengthM: number; widthM: number }, maxWeightKg: number | null) {
+function packInOrder(items: PackItem[], bed: Bed, maxWeightKg: number | null) {
   const placed: Placed[] = [];
   const notFit: PackItem[] = [];
   let weight = 0;
@@ -121,11 +137,9 @@ function packInOrder(items: PackItem[], bed: { lengthM: number; widthM: number }
  * largura, mais pesado) e fica com a que acomodou mais área. Não é ótimo —
  * encaixe de retângulos é um problema difícil — mas serve de ponto de partida.
  */
-export function autoPack(
-  items: PackItem[],
-  bed: { lengthM: number; widthM: number },
-  maxWeightKg: number | null = null
-) {
+export function autoPack(items: PackItem[], bed: Bed, maxWeightKg: number | null = null) {
+  // Primeiro tenta tudo dentro da carroceria; só o que sobrar usa a folga pra fora.
+  const strict: Bed = { lengthM: bed.lengthM, widthM: bed.widthM };
   const orders: ((a: PackItem, b: PackItem) => number)[] = [
     (a, b) => b.w * b.h - a.w * a.h,
     (a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h),
@@ -135,14 +149,43 @@ export function autoPack(
   let best: ReturnType<typeof packInOrder> | null = null;
   let bestArea = -1;
   for (const cmp of orders) {
-    const result = packInOrder([...items].sort(cmp), bed, maxWeightKg);
+    const result = packInOrder([...items].sort(cmp), strict, maxWeightKg);
     const area = result.placed.reduce((s, p) => s + p.w * p.h, 0);
     if (area > bestArea + EPS || (Math.abs(area - bestArea) < EPS && best && result.notFit.length < best.notFit.length)) {
       best = result;
       bestArea = area;
     }
   }
-  return best ?? { placed: [], notFit: items };
+  if (!best) return { placed: [], notFit: items };
+
+  if ((bed.overhangM ?? 0) > 0 && best.notFit.length > 0) {
+    const weightOf = new Map(items.map((i) => [i.id, i.weightKg]));
+    let weight = best.placed.reduce((s, p) => s + (weightOf.get(p.id) ?? 0), 0);
+    const placed = [...best.placed];
+    const notFit: PackItem[] = [];
+    for (const it of [...best.notFit].sort((a, b) => b.w * b.h - a.w * a.h)) {
+      if (maxWeightKg != null && weight + it.weightKg > maxWeightKg) {
+        notFit.push(it);
+        continue;
+      }
+      const spot = findSpot({ w: it.w, h: it.h }, placed, bed);
+      if (!spot) {
+        notFit.push(it);
+        continue;
+      }
+      weight += it.weightKg;
+      placed.push({
+        id: it.id,
+        x: spot.x,
+        y: spot.y,
+        rotated: spot.rotated,
+        w: spot.rotated ? it.h : it.w,
+        h: spot.rotated ? it.w : it.h,
+      });
+    }
+    return { placed, notFit };
+  }
+  return best;
 }
 
 /** Centro de gravidade ao longo do comprimento (0 = cabine, 1 = fundo), ponderado pelo peso. */

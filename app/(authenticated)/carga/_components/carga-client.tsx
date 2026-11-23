@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ClipboardCopy, Loader2, Pencil, Plus, RotateCw, Search, Trash2, Truck, Wand2, X } from "lucide-react";
+import { AlertTriangle, ArrowUpFromLine, ClipboardCopy, Loader2, Pencil, Plus, RotateCw, Search, Trash2, Truck, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import {
   centerOfGravity,
   findSpot,
   isValidPlacement,
+  overhangOf,
+  type Bed,
   type Rect,
   type Vehicle,
 } from "@/lib/carga";
@@ -20,7 +22,7 @@ type Eq = {
   equipmentNumber: string;
   name: string;
   model: string | null;
-  leaseStatus: "DISPONIVEL" | "LOCADO" | "MANUTENCAO";
+  leaseStatus: "DISPONIVEL" | "LOCADO" | "MANUTENCAO" | null; // null: item extra (ex.: bacia)
   client: string | null;
   lengthM: number | null;
   widthM: number | null;
@@ -28,7 +30,9 @@ type Eq = {
   weightKg: number | null;
 };
 // x/y = null: escolhido pra carga mas ainda sem lugar na carroceria.
-type Item = { uid: string; eqId: string; x: number | null; y: number | null; rotated: boolean };
+// inBasin: o gerador está dentro de uma bacia (uid do item-bacia); ele anda, gira e
+// pesa junto com ela, e não ocupa piso próprio. inRot: gerador girado dentro da bacia.
+type Item = { uid: string; eqId: string; x: number | null; y: number | null; rotated: boolean; inBasin?: string; inRot?: boolean };
 
 const fmt = (n: number, d = 2) => n.toFixed(d).replace(".", ",");
 const fmtKg = (n: number) => `${Math.round(n).toLocaleString("pt-BR")} kg`;
@@ -37,10 +41,20 @@ const STATUS_LABEL = { DISPONIVEL: "Disponível", LOCADO: "Locado", MANUTENCAO: 
 const STATUS_DOT = { DISPONIVEL: "bg-green-500", LOCADO: "bg-blue-500", MANUTENCAO: "bg-amber-500" } as const;
 
 const hasDims = (e: Eq) => e.lengthM != null && e.widthM != null;
+const isBasinEq = (e: Eq | undefined) => !!e && e.equipmentNumber.startsWith("BC");
+const FIT_EPS = 1e-6;
+/** Orientação do gerador dentro da bacia: false = alinhado, true = girado 90°, null = não cabe. */
+function basinFit(g: Eq, b: Eq): boolean | null {
+  if (!hasDims(g) || !hasDims(b)) return null;
+  if (g.lengthM! <= b.lengthM! + FIT_EPS && g.widthM! <= b.widthM! + FIT_EPS) return false;
+  if (g.widthM! <= b.lengthM! + FIT_EPS && g.lengthM! <= b.widthM! + FIT_EPS) return true;
+  return null;
+}
 const itemSize = (e: Eq, rotated: boolean) =>
   rotated ? { w: e.widthM as number, h: e.lengthM as number } : { w: e.lengthM as number, h: e.widthM as number };
 
 function itemColor(code: string): string {
+  if (code.startsWith("BC")) return "#0d9488";
   if (code.startsWith("MTS")) return "#ea580c";
   if (code.startsWith("TL")) return "#7c3aed";
   return "#2563eb";
@@ -56,6 +70,9 @@ export default function CargaClient() {
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [onlyWithDims, setOnlyWithDims] = useState(false);
+  // Carga pode passar pra fora da carroceria (não é o ideal, mas às vezes acontece).
+  const [overhangOn, setOverhangOn] = useState(false);
+  const [overhangStr, setOverhangStr] = useState("1,00");
   const [vehicleDialog, setVehicleDialog] = useState(false);
   const [editEqId, setEditEqId] = useState<string | null>(null);
 
@@ -83,7 +100,15 @@ export default function CargaClient() {
 
   const vehicle = vehicles.find((v) => v.id === vehicleId) ?? null;
   const eqById = useMemo(() => new Map(equipments.map((e) => [e.id, e])), [equipments]);
-  const bed = useMemo(() => (vehicle ? { lengthM: vehicle.lengthM, widthM: vehicle.widthM } : null), [vehicle]);
+  const overhangM = useMemo(() => {
+    if (!overhangOn) return 0;
+    const n = Number(overhangStr.replace(",", "."));
+    return Number.isFinite(n) ? Math.min(3, Math.max(0, n)) : 0;
+  }, [overhangOn, overhangStr]);
+  const bed: Bed | null = useMemo(
+    () => (vehicle ? { lengthM: vehicle.lengthM, widthM: vehicle.widthM, overhangM } : null),
+    [vehicle, overhangM]
+  );
 
   // ── retângulos dos itens já posicionados ──
   const rectOf = useCallback(
@@ -110,7 +135,7 @@ export default function CargaClient() {
     ro.observe(boxRef.current);
     return () => ro.disconnect();
   }, [vehicle]);
-  const scale = bed ? Math.max(14, Math.min(160, (boxW - 40) / bed.lengthM)) : 40;
+  const scale = bed ? Math.max(14, Math.min(160, (boxW - 40) / (bed.lengthM + overhangM))) : 40;
 
   // ── arrastar ──
   const dragRef = useRef<{ uid: string; sx: number; sy: number; ox: number; oy: number; moved: boolean } | null>(null);
@@ -167,6 +192,21 @@ export default function CargaClient() {
     if (eq && hasDims(eq)) {
       const { w, h } = itemSize(eq, it.rotated);
       const r = { x: drag.x, y: drag.y, w, h };
+      // soltou o gerador com o centro em cima de uma bacia: entra na bacia
+      if (!isBasinEq(eq)) {
+        const cx = r.x + w / 2;
+        const cy = r.y + h / 2;
+        const target = items.find((b) => {
+          const be = eqById.get(b.eqId);
+          const br = rectOf(b);
+          return b.uid !== it.uid && isBasinEq(be) && br && cx >= br.x && cx <= br.x + br.w && cy >= br.y && cy <= br.y + br.h;
+        });
+        if (target) {
+          nestInto(it, eq, target.uid);
+          setDrag(null);
+          return;
+        }
+      }
       if (isValidPlacement(r, placedRects(it.uid), bed)) {
         setItems((all) => all.map((i) => (i.uid === it.uid ? { ...i, x: drag.x, y: drag.y } : i)));
       } else {
@@ -178,7 +218,9 @@ export default function CargaClient() {
 
   // ── ações ──
   const rotate = useCallback(
-    (uid: string) => {
+    (rawUid: string) => {
+      // gerador dentro da bacia: quem gira é a bacia (levando o gerador junto)
+      const uid = items.find((i) => i.uid === rawUid)?.inBasin ?? rawUid;
       const it = items.find((i) => i.uid === uid);
       const eq = it && eqById.get(it.eqId);
       if (!it || !eq || !hasDims(eq) || !bed) return;
@@ -201,9 +243,65 @@ export default function CargaClient() {
   );
 
   const removeItem = useCallback((uid: string) => {
-    setItems((all) => all.filter((i) => i.uid !== uid));
+    // se tirou uma bacia, o gerador que estava nela vira "ficou de fora" (não some sem avisar)
+    setItems((all) =>
+      all.filter((i) => i.uid !== uid).map((i) => (i.inBasin === uid ? { ...i, inBasin: undefined, inRot: undefined } : i))
+    );
     setSelected((s) => (s === uid ? null : s));
   }, []);
+
+  // ── gerador sobre a bacia ──
+  const nestInto = (genItem: Item | null, genEq: Eq, basinUid: string): boolean => {
+    const basin = items.find((i) => i.uid === basinUid);
+    const be = basin && eqById.get(basin.eqId);
+    if (!basin || !be || !isBasinEq(be)) return false;
+    if (isBasinEq(genEq)) {
+      toast.error("Só gerador vai em cima de bacia.");
+      return false;
+    }
+    if (items.some((i) => i.inBasin === basinUid && i.uid !== genItem?.uid)) {
+      toast.error(`A bacia ${be.equipmentNumber} já está com um gerador.`);
+      return false;
+    }
+    if (!hasDims(be) || !hasDims(genEq)) {
+      toast.error("Faltam as medidas da bacia ou do gerador.");
+      return false;
+    }
+    const fit = basinFit(genEq, be);
+    if (fit === null) {
+      toast.error(
+        `${genEq.equipmentNumber} (${fmt(genEq.lengthM!)} × ${fmt(genEq.widthM!)} m) não cabe dentro da bacia ${be.equipmentNumber} (${fmt(be.lengthM!)} × ${fmt(be.widthM!)} m).`
+      );
+      return false;
+    }
+    if (genItem) {
+      setItems((all) => all.map((i) => (i.uid === genItem.uid ? { ...i, x: null, y: null, rotated: false, inBasin: basinUid, inRot: fit } : i)));
+    } else {
+      setItems((all) => [...all, { uid: `${genEq.id}-${Date.now()}`, eqId: genEq.id, x: null, y: null, rotated: false, inBasin: basinUid, inRot: fit }]);
+    }
+    setSelected(basinUid);
+    return true;
+  };
+
+  // tira o gerador de cima da bacia e procura outro lugar pra ele na carroceria
+  const unnest = (uid: string) => {
+    const it = items.find((i) => i.uid === uid);
+    const eq = it && eqById.get(it.eqId);
+    if (!it || !eq || !hasDims(eq) || !bed) return;
+    const size = { w: eq.lengthM as number, h: eq.widthM as number };
+    const spot =
+      findSpot(size, placedRects(), { lengthM: bed.lengthM, widthM: bed.widthM }) ??
+      (overhangM > 0 ? findSpot(size, placedRects(), bed) : null);
+    setItems((all) =>
+      all.map((i) =>
+        i.uid === uid
+          ? { ...i, inBasin: undefined, inRot: undefined, x: spot?.x ?? null, y: spot?.y ?? null, rotated: spot?.rotated ?? false }
+          : i
+      )
+    );
+    if (!spot) toast.error(`${eq.equipmentNumber} não coube na carroceria sozinho. Ficou em "Ficaram de fora".`);
+    setSelected(uid);
+  };
 
   // atalhos: R gira, Delete tira o equipamento selecionado
   useEffect(() => {
@@ -217,6 +315,25 @@ export default function CargaClient() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, rotate, removeItem]);
 
+  // Ao desligar, o que estava passando pra fora perde o lugar (volta pra "ficaram de fora").
+  const toggleOverhang = (on: boolean) => {
+    setOverhangOn(on);
+    if (on || !vehicle) return;
+    const strict: Bed = { lengthM: vehicle.lengthM, widthM: vehicle.widthM };
+    // calculado fora do setItems pra não contar duas vezes (o React pode repetir a atualização)
+    let lost = 0;
+    const next = items.map((i) => {
+      const r = rectOf(i);
+      if (r && !isValidPlacement(r, [], strict)) {
+        lost++;
+        return { ...i, x: null, y: null };
+      }
+      return i;
+    });
+    setItems(next);
+    if (lost > 0) toast.info(`${lost} equipamento(s) estavam fora da carroceria e saíram da carga. Use "Organizar".`);
+  };
+
   const addEquipment = (eq: Eq) => {
     if (!bed) {
       toast.error("Cadastre um veículo primeiro.");
@@ -228,7 +345,10 @@ export default function CargaClient() {
       return;
     }
     const uid = `${eq.id}-${Date.now()}`;
-    const spot = findSpot({ w: eq.lengthM as number, h: eq.widthM as number }, placedRects(), bed);
+    const size = { w: eq.lengthM as number, h: eq.widthM as number };
+    const spot =
+      findSpot(size, placedRects(), { lengthM: bed.lengthM, widthM: bed.widthM }) ??
+      (overhangM > 0 ? findSpot(size, placedRects(), bed) : null);
     if (!spot) {
       setItems((all) => [...all, { uid, eqId: eq.id, x: null, y: null, rotated: false }]);
       toast.error(`${eq.equipmentNumber} não coube. Ficou em "Sem espaço". Tente "Organizar" ou outro veículo.`);
@@ -240,14 +360,26 @@ export default function CargaClient() {
 
   const organize = () => {
     if (!bed) return;
+    // bacia com gerador dentro = uma unidade só (ocupa a bacia; o peso é a soma)
+    const nestedWeight = new Map<string, number>();
+    for (const i of items) {
+      if (i.inBasin) nestedWeight.set(i.inBasin, (nestedWeight.get(i.inBasin) ?? 0) + (eqById.get(i.eqId)?.weightKg ?? 0));
+    }
     const pack = items
+      .filter((i) => !i.inBasin)
       .map((i) => ({ i, e: eqById.get(i.eqId) }))
       .filter((p): p is { i: Item; e: Eq } => !!p.e && hasDims(p.e))
-      .map(({ i, e }) => ({ id: i.uid, w: e.lengthM as number, h: e.widthM as number, weightKg: e.weightKg ?? 0 }));
+      .map(({ i, e }) => ({
+        id: i.uid,
+        w: e.lengthM as number,
+        h: e.widthM as number,
+        weightKg: (e.weightKg ?? 0) + (nestedWeight.get(i.uid) ?? 0),
+      }));
     const result = autoPack(pack, bed, vehicle?.capacityKg ?? null);
     const byId = new Map(result.placed.map((p) => [p.id, p]));
     setItems((all) =>
       all.map((i) => {
+        if (i.inBasin) return i;
         const p = byId.get(i.uid);
         return p ? { ...i, x: p.x, y: p.y, rotated: p.rotated } : { ...i, x: null, y: null, rotated: false };
       })
@@ -263,21 +395,20 @@ export default function CargaClient() {
     setVehicleId(id);
     const v = vehicles.find((x) => x.id === id);
     if (!v) return;
-    const nb = { lengthM: v.lengthM, widthM: v.widthM };
+    const nb: Bed = { lengthM: v.lengthM, widthM: v.widthM, overhangM };
     let lost = 0;
     const kept: Rect[] = [];
-    setItems((all) =>
-      all.map((i) => {
-        const r = rectOf(i);
-        if (r && isValidPlacement(r, kept, nb)) {
-          kept.push(r);
-          return i;
-        }
-        if (r) lost++;
-        return { ...i, x: null, y: null };
-      })
-    );
-    setTimeout(() => lost > 0 && toast.info(`${lost} equipamento(s) não cabem na posição atual no novo veículo. Use "Organizar".`), 0);
+    const next = items.map((i) => {
+      const r = rectOf(i);
+      if (r && isValidPlacement(r, kept, nb)) {
+        kept.push(r);
+        return i;
+      }
+      if (r) lost++;
+      return { ...i, x: null, y: null };
+    });
+    setItems(next);
+    if (lost > 0) toast.info(`${lost} equipamento(s) não cabem na posição atual no novo veículo. Use "Organizar".`);
   };
 
   // ── resumo ──
@@ -286,16 +417,45 @@ export default function CargaClient() {
     const placed = items
       .map((i) => ({ i, e: eqById.get(i.eqId), r: rectOf(i) }))
       .filter((p): p is { i: Item; e: Eq; r: Rect } => !!p.e && !!p.r);
-    const pending = items.filter((i) => i.x == null);
+    // gerador dentro de bacia: conta peso, centro de gravidade e altura, mas usa o piso da bacia
+    const nestedPlaced = items
+      .filter((i) => i.inBasin)
+      .map((i) => {
+        const parent = items.find((p) => p.uid === i.inBasin);
+        const pr = parent ? rectOf(parent) : null;
+        return { i, e: eqById.get(i.eqId), r: pr, basinEq: parent ? eqById.get(parent.eqId) : undefined };
+      })
+      .filter((p): p is { i: Item; e: Eq; r: Rect; basinEq: Eq | undefined } => !!p.e && !!p.r);
+    const pending = items.filter((i) => i.x == null && !i.inBasin);
     const area = placed.reduce((s, p) => s + p.r.w * p.r.h, 0);
-    const weight = placed.reduce((s, p) => s + (p.e.weightKg ?? 0), 0);
-    const noWeight = placed.filter((p) => p.e.weightKg == null).length;
-    const tooTall = vehicle.heightM ? placed.filter((p) => p.e.heightM != null && p.e.heightM > vehicle.heightM!) : [];
+    const weighed = [...placed, ...nestedPlaced];
+    const weight = weighed.reduce((s, p) => s + (p.e.weightKg ?? 0), 0);
+    const noWeight = weighed.filter((p) => p.e.weightKg == null).length;
+    const tooTall = vehicle.heightM
+      ? [
+          ...placed.filter((p) => p.e.heightM != null && p.e.heightM > vehicle.heightM!),
+          // gerador sobre bacia: soma a altura da bacia (se conhecida)
+          ...nestedPlaced.filter((p) => p.e.heightM != null && p.e.heightM + (p.basinEq?.heightM ?? 0) > vehicle.heightM!),
+        ]
+      : [];
     const cg = centerOfGravity(
-      placed.map((p) => ({ x: p.r.x, w: p.r.w, weightKg: p.e.weightKg ?? 0 })),
+      weighed.map((p) => ({ x: p.r.x, w: p.r.w, weightKg: p.e.weightKg ?? 0 })),
       bed.lengthM
     );
-    return { placed, pending, area, areaPct: area / (bed.lengthM * bed.widthM), weight, noWeight, tooTall, cg };
+    const overhanging = placed
+      .map((p) => ({ p, oh: overhangOf(p.r, bed) }))
+      .filter((x) => x.oh.any)
+      .map(({ p, oh }) => ({
+        code: p.e.equipmentNumber + nestedPlaced.filter((n) => n.i.inBasin === p.i.uid).map((n) => ` + ${n.e.equipmentNumber}`).join(""),
+        text: [
+          oh.rear > 0.004 ? `${fmt(oh.rear)} m atrás` : "",
+          oh.sideA > 0.004 ? `${fmt(oh.sideA)} m pra um lado` : "",
+          oh.sideB > 0.004 ? `${fmt(oh.sideB)} m pro outro lado` : "",
+        ]
+          .filter(Boolean)
+          .join(" e "),
+      }));
+    return { placed, nestedPlaced, pending, area, areaPct: area / (bed.lengthM * bed.widthM), weight, noWeight, tooTall, cg, overhanging };
   }, [items, bed, vehicle, eqById, rectOf]);
 
   const copySummary = async () => {
@@ -306,8 +466,15 @@ export default function CargaClient() {
         (p) =>
           `• ${p.e.equipmentNumber}${p.e.weightKg != null ? ` — ${fmtKg(p.e.weightKg)}` : ""} (${fmt(p.r.w)} × ${fmt(p.r.h)} m)`
       ),
+      ...summary.nestedPlaced.map(
+        (p) =>
+          `• ${p.e.equipmentNumber}${p.e.weightKg != null ? ` — ${fmtKg(p.e.weightKg)}` : ""} (sobre a bacia ${p.basinEq?.equipmentNumber ?? ""})`
+      ),
       `Peso total: ${fmtKg(summary.weight)}${vehicle.capacityKg ? ` de ${fmtKg(vehicle.capacityKg)}` : ""}`,
       `Ocupação do piso: ${Math.round(summary.areaPct * 100)}%`,
+      ...(summary.overhanging.length > 0
+        ? [`ATENÇÃO — fora da carroceria: ${summary.overhanging.map((o) => `${o.code} (${o.text})`).join("; ")}`]
+        : []),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
@@ -338,6 +505,17 @@ export default function CargaClient() {
   if (error) return <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 p-4 text-sm">{error}</div>;
 
   const overCapacity = !!(summary && vehicle?.capacityKg && summary.weight > vehicle.capacityKg);
+
+  // bacia relacionada ao item selecionado (a própria bacia, ou a bacia que leva o gerador selecionado)
+  const selItem = items.find((i) => i.uid === selected) ?? null;
+  const selEq = selItem ? eqById.get(selItem.eqId) : undefined;
+  const basinItem = selItem ? (selItem.inBasin ? items.find((i) => i.uid === selItem.inBasin) : isBasinEq(selEq) ? selItem : null) ?? null : null;
+  const basinEq = basinItem ? eqById.get(basinItem.eqId) : undefined;
+  const nestedItem = basinItem ? items.find((i) => i.inBasin === basinItem.uid) ?? null : null;
+  const nestCandidates =
+    basinEq && isBasinEq(basinEq) && !nestedItem
+      ? equipments.filter((g) => !isBasinEq(g) && hasDims(g) && basinFit(g, basinEq) !== null)
+      : [];
 
   return (
     <div className="space-y-4">
@@ -400,7 +578,10 @@ export default function CargaClient() {
                 const used = inLoad.has(e.id);
                 return (
                   <div key={e.id} className="px-3 py-2 flex items-center gap-2 hover:bg-gray-50">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[e.leaseStatus]}`} title={STATUS_LABEL[e.leaseStatus]} />
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${e.leaseStatus ? STATUS_DOT[e.leaseStatus] : "bg-teal-500"}`}
+                      title={e.leaseStatus ? STATUS_LABEL[e.leaseStatus] : "Bacia / item extra"}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-gray-900 font-mono truncate">{e.equipmentNumber}</div>
                       <div className="text-xs text-gray-500 truncate">
@@ -442,6 +623,9 @@ export default function CargaClient() {
                   <Button size="sm" variant="outline" className="gap-1" disabled={!selected} onClick={() => selected && removeItem(selected)}>
                     <Trash2 className="w-4 h-4" /> Tirar
                   </Button>
+                  <Button size="sm" variant="outline" className="gap-1" disabled={!nestedItem} onClick={() => nestedItem && unnest(nestedItem.uid)}>
+                    <ArrowUpFromLine className="w-4 h-4" /> Tirar da bacia
+                  </Button>
                   <Button size="sm" className="bg-green-500 hover:bg-green-600 gap-1" disabled={items.length === 0} onClick={organize}>
                     <Wand2 className="w-4 h-4" /> Organizar
                   </Button>
@@ -451,8 +635,56 @@ export default function CargaClient() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-3 flex-wrap mb-2 text-sm">
+                <label className="inline-flex items-center gap-2 text-gray-700">
+                  <input type="checkbox" checked={overhangOn} onChange={(e) => toggleOverhang(e.target.checked)} />
+                  Permitir sair da carroceria
+                </label>
+                {overhangOn && (
+                  <label className="inline-flex items-center gap-1 text-gray-600">
+                    até
+                    <Input className="w-20 h-8" inputMode="decimal" value={overhangStr} onChange={(e) => setOverhangStr(e.target.value)} />
+                    m (atrás e nas laterais)
+                  </label>
+                )}
+              </div>
+
+              {basinEq && basinItem && isBasinEq(basinEq) && (
+                <div className="flex items-center gap-2 flex-wrap mb-2 text-sm bg-teal-50 border border-teal-200 rounded px-2 py-1.5">
+                  <span className="text-teal-900">
+                    Bacia <b>{basinEq.equipmentNumber}</b> ({fmt(basinEq.lengthM ?? 0)} × {fmt(basinEq.widthM ?? 0)} m)
+                  </span>
+                  {nestedItem ? (
+                    <span className="text-teal-900">
+                      · gerador em cima: <b>{eqById.get(nestedItem.eqId)?.equipmentNumber}</b>
+                    </span>
+                  ) : nestCandidates.length > 0 ? (
+                    <select
+                      className="border rounded-md px-2 py-1 text-sm bg-white"
+                      value=""
+                      onChange={(e) => {
+                        const g = eqById.get(e.target.value);
+                        if (g) nestInto(items.find((i) => i.eqId === g.id) ?? null, g, basinItem.uid);
+                      }}
+                    >
+                      <option value="">Colocar gerador nesta bacia…</option>
+                      {nestCandidates.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.equipmentNumber} ({fmt(g.lengthM!)} × {fmt(g.widthM!)} m)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs text-teal-800">Nenhum gerador cadastrado cabe nesta bacia (ou faltam medidas).</span>
+                  )}
+                </div>
+              )}
+
               <div ref={boxRef} className="w-full overflow-x-auto">
-                <div className="flex items-stretch">
+                <div
+                  className="flex items-stretch"
+                  style={{ padding: `${overhangM * scale}px ${overhangM * scale}px ${overhangM * scale}px 0` }}
+                >
                   <div className="flex items-center justify-center text-[10px] font-semibold text-gray-400 tracking-widest [writing-mode:vertical-rl] rotate-180 pr-1">
                     CABINE
                   </div>
@@ -467,6 +699,18 @@ export default function CargaClient() {
                     }}
                     onPointerDown={(e) => e.target === e.currentTarget && setSelected(null)}
                   >
+                    {overhangM > 0 && (
+                      <div
+                        className="absolute border-2 border-dashed border-amber-400 bg-amber-50/40 pointer-events-none"
+                        style={{
+                          left: -2,
+                          top: -overhangM * scale - 2,
+                          right: -overhangM * scale - 2,
+                          bottom: -overhangM * scale - 2,
+                        }}
+                        title={`Folga permitida pra fora: ${fmt(overhangM)} m`}
+                      />
+                    )}
                     {summary?.cg != null && (
                       <div
                         className="absolute top-0 bottom-0 border-l-2 border-dashed border-rose-500 pointer-events-none"
@@ -482,6 +726,9 @@ export default function CargaClient() {
                       const r = dragging ? { ...base, x: drag!.x, y: drag!.y } : base;
                       const valid = isValidPlacement(r, placedRects(it.uid), bed);
                       const tall = !!(vehicle.heightM && e.heightM != null && e.heightM > vehicle.heightM);
+                      const out = overhangOf(r, bed).any;
+                      const nestedHere = items.find((x) => x.inBasin === it.uid);
+                      const ne = nestedHere ? eqById.get(nestedHere.eqId) : undefined;
                       return (
                         <div
                           key={it.uid}
@@ -489,7 +736,9 @@ export default function CargaClient() {
                           onPointerMove={(ev) => onPointerMove(ev, it)}
                           onPointerUp={() => onPointerUp(it)}
                           onDoubleClick={() => rotate(it.uid)}
-                          className={`absolute rounded-sm text-white select-none overflow-hidden flex flex-col items-center justify-center text-center leading-tight ${
+                          className={`absolute rounded-sm text-white select-none overflow-hidden flex flex-col items-center ${
+                            ne ? "justify-start" : "justify-center"
+                          } text-center leading-tight ${
                             dragging ? "cursor-grabbing z-20 opacity-90" : "cursor-grab"
                           } ${selected === it.uid ? "ring-2 ring-offset-1 ring-gray-900 z-10" : ""}`}
                           style={{
@@ -499,16 +748,49 @@ export default function CargaClient() {
                             height: r.h * scale,
                             background: valid ? itemColor(e.equipmentNumber) : "#dc2626",
                             border: tall ? "2px dashed #fbbf24" : "1px solid rgba(255,255,255,.7)",
+                            boxShadow: out ? "0 0 0 2px #f59e0b" : undefined,
                             touchAction: "none",
                           }}
                           title={`${e.equipmentNumber} · ${fmt(r.w)} × ${fmt(r.h)} m${e.weightKg != null ? ` · ${fmtKg(e.weightKg)}` : ""}${tall ? " · mais alto que a carroceria" : ""}`}
                         >
                           <span className="text-[11px] font-bold px-0.5">{e.equipmentNumber}</span>
-                          {r.w * scale > 70 && r.h * scale > 34 && (
+                          {r.w * scale > 70 && r.h * scale > 34 && !ne && (
                             <span className="text-[10px] opacity-90">
                               {fmt(r.w)}×{fmt(r.h)}{e.weightKg != null ? ` · ${Math.round(e.weightKg)}kg` : ""}
                             </span>
                           )}
+                          {nestedHere && ne && hasDims(ne) && (() => {
+                            // gerador dentro da bacia, centralizado; acompanha o giro da bacia
+                            const w0 = nestedHere.inRot ? ne.widthM! : ne.lengthM!;
+                            const h0 = nestedHere.inRot ? ne.lengthM! : ne.widthM!;
+                            const gw = it.rotated ? h0 : w0;
+                            const gh = it.rotated ? w0 : h0;
+                            return (
+                              <div
+                                onPointerDown={(ev) => {
+                                  ev.stopPropagation();
+                                  setSelected(nestedHere.uid);
+                                }}
+                                className={`absolute rounded-sm flex flex-col items-center justify-center text-center leading-tight cursor-pointer ${
+                                  selected === nestedHere.uid ? "ring-2 ring-gray-900" : ""
+                                }`}
+                                style={{
+                                  left: ((r.w - gw) / 2) * scale,
+                                  top: ((r.h - gh) / 2) * scale + 6,
+                                  width: gw * scale,
+                                  height: gh * scale,
+                                  background: itemColor(ne.equipmentNumber),
+                                  border: "1px solid rgba(255,255,255,.85)",
+                                }}
+                                title={`${ne.equipmentNumber} sobre a bacia ${e.equipmentNumber}${ne.weightKg != null ? ` · ${fmtKg(ne.weightKg)}` : ""}`}
+                              >
+                                <span className="text-[11px] font-bold px-0.5">{ne.equipmentNumber}</span>
+                                {gw * scale > 70 && gh * scale > 30 && (
+                                  <span className="text-[10px] opacity-90">{fmt(gw)}×{fmt(gh)}</span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -519,7 +801,7 @@ export default function CargaClient() {
                     )}
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1 pl-4">Cada quadradinho = 1 m · duplo clique no equipamento gira 90° · tecla R gira · Delete tira</div>
+                <div className="text-[10px] text-gray-400 mt-1 pl-4">Cada quadradinho = 1 m · duplo clique gira 90° (a bacia leva o gerador junto) · tecla R gira · Delete tira · solte o gerador em cima da bacia para colocá-lo dentro</div>
               </div>
             </div>
 
@@ -552,7 +834,7 @@ export default function CargaClient() {
                   <div className="h-2 bg-gray-100 rounded mt-1 overflow-hidden">
                     <div className="h-full bg-green-500" style={{ width: `${Math.min(100, summary.areaPct * 100)}%` }} />
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">{summary.placed.length} equipamento(s) na carga</div>
+                  <div className="text-xs text-gray-500 mt-1">{summary.placed.length + summary.nestedPlaced.length} item(ns) na carga</div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Peso</div>
@@ -589,6 +871,12 @@ export default function CargaClient() {
                     <div className="text-xs text-gray-500">Informe o peso dos equipamentos para ver.</div>
                   )}
                 </div>
+                {summary.overhanging.length > 0 && (
+                  <div className="sm:col-span-3 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded px-2 py-1.5">
+                    <b>Carga fora da carroceria:</b> {summary.overhanging.map((o) => `${o.code} (${o.text})`).join("; ")}. Exige
+                    atenção à sinalização e à legislação de trânsito — confirme com o motorista antes de sair.
+                  </div>
+                )}
                 {summary.tooTall.length > 0 && (
                   <div className="sm:col-span-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
                     Mais altos que a altura útil informada ({fmt(vehicle.heightM!)} m): {summary.tooTall.map((p) => p.e.equipmentNumber).join(", ")}.

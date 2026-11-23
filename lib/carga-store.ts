@@ -6,6 +6,17 @@ import type { Vehicle } from "@/lib/carga";
 
 const VEHICLES_KEY = "carga_veiculos";
 const WEIGHTS_KEY = "carga_pesos";
+const EXTRAS_KEY = "carga_extras";
+
+/** Item que se carrega mas não é equipamento cadastrado (ex.: bacia de contenção). */
+export type ExtraItem = {
+  id: string; // "extra:BC-01"
+  code: string;
+  name: string;
+  lengthM: number | null;
+  widthM: number | null;
+  heightM: number | null;
+};
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   const row = await prisma.dataStore.findUnique({ where: { key } });
@@ -25,6 +36,9 @@ async function writeJson(key: string, value: unknown) {
 
 export const loadVehicles = () => readJson<Vehicle[]>(VEHICLES_KEY, []);
 export const saveVehicles = (v: Vehicle[]) => writeJson(VEHICLES_KEY, v);
+
+export const loadExtras = () => readJson<ExtraItem[]>(EXTRAS_KEY, []);
+export const saveExtras = (e: ExtraItem[]) => writeJson(EXTRAS_KEY, e);
 
 /** equipmentId -> peso em kg */
 export const loadWeights = () => readJson<Record<string, number>>(WEIGHTS_KEY, {});
