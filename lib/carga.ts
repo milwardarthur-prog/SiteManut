@@ -198,3 +198,168 @@ export function centerOfGravity(
   const moment = items.reduce((s, i) => s + i.weightKg * (i.x + i.w / 2), 0);
   return Math.min(1, Math.max(0, moment / total / bedLengthM));
 }
+
+// ═══ Vários veículos ═══════════════════════════════════════════════════════════
+
+/** Um veículo da carga: carroceria (com a folga pra fora que o usuário liberou) e limite de peso. */
+export type SlotBed = { key: string; bed: Bed; maxWeightKg: number | null };
+export type Assigned = { slotKey: string; x: number; y: number; rotated: boolean; w: number; h: number };
+/**
+ * FILL: enche um veículo por vez (usa o mínimo de veículos).
+ * BALANCE: reparte entre todos, buscando deixar o peso parecido em cada um.
+ */
+export type DistributeMode = "FILL" | "BALANCE";
+
+type Acc = { slot: SlotBed; strict: Bed; placed: Placed[]; weight: number };
+
+function findPlace(acc: Acc, it: PackItem, bed: Bed): Placed | null {
+  const cap = acc.slot.maxWeightKg;
+  if (cap != null && acc.weight + it.weightKg > cap + EPS) return null;
+  const spot = findSpot({ w: it.w, h: it.h }, acc.placed, bed);
+  if (!spot) return null;
+  return {
+    id: it.id,
+    x: spot.x,
+    y: spot.y,
+    rotated: spot.rotated,
+    w: spot.rotated ? it.h : it.w,
+    h: spot.rotated ? it.w : it.h,
+  };
+}
+
+const commit = (acc: Acc, p: Placed, it: PackItem) => {
+  acc.placed.push(p);
+  acc.weight += it.weightKg;
+};
+
+const accArea = (a: Acc) => a.slot.bed.lengthM * a.slot.bed.widthM;
+const accLoad = (a: Acc) => {
+  const cap = a.slot.maxWeightKg;
+  // sem capacidade informada, compara por kg/m² (referência arbitrária só pra equilibrar)
+  return cap ? a.weight / cap : a.weight / (accArea(a) * 300);
+};
+/** Quão cheio o veículo ficaria com o item (menor = mais folgado): peso primeiro, piso no desempate. */
+function scoreWith(acc: Acc, it: PackItem): number {
+  const cap = acc.slot.maxWeightKg;
+  const w = acc.weight + it.weightKg;
+  const wr = cap ? w / cap : w / (accArea(acc) * 300);
+  const used = acc.placed.reduce((s, p) => s + p.w * p.h, 0) + it.w * it.h;
+  return wr + 0.001 * (used / accArea(acc));
+}
+
+/** Coloca `it` no melhor veículo segundo o modo; `useOverhang` libera a folga pra fora da carroceria. */
+function placeSomewhere(accs: Acc[], it: PackItem, mode: DistributeMode, useOverhang: boolean): boolean {
+  let bestAcc: Acc | null = null;
+  let bestP: Placed | null = null;
+  let bestScore = Infinity;
+  for (const acc of accs) {
+    if (useOverhang && (acc.slot.bed.overhangM ?? 0) <= 0) continue;
+    const p = findPlace(acc, it, useOverhang ? acc.slot.bed : acc.strict);
+    if (!p) continue;
+    if (mode === "FILL") {
+      commit(acc, p, it);
+      return true;
+    }
+    const sc = scoreWith(acc, it);
+    if (sc < bestScore - 1e-9) {
+      bestScore = sc;
+      bestAcc = acc;
+      bestP = p;
+    }
+  }
+  if (bestAcc && bestP) {
+    commit(bestAcc, bestP, it);
+    return true;
+  }
+  return false;
+}
+
+function runOrder(order: PackItem[], slots: SlotBed[], mode: DistributeMode) {
+  const accs: Acc[] = slots.map((slot) => ({
+    slot,
+    strict: { lengthM: slot.bed.lengthM, widthM: slot.bed.widthM },
+    placed: [],
+    weight: 0,
+  }));
+  // 1ª passada: tudo dentro das carrocerias. 2ª: o que sobrou usa a folga pra fora, nos veículos que liberaram.
+  let rest = order.filter((it) => !placeSomewhere(accs, it, mode, false));
+  if (rest.length > 0) {
+    rest = [...rest].sort((a, b) => b.w * b.h - a.w * a.h).filter((it) => !placeSomewhere(accs, it, mode, true));
+  }
+  const notFitArea = rest.reduce((s, it) => s + it.w * it.h, 0);
+  const used = accs.filter((a) => a.placed.length > 0).length;
+  const peak = accs.reduce((m, a) => Math.max(m, accLoad(a)), 0);
+  return { accs, notFit: rest, notFitArea, used, peak };
+}
+
+type RunResult = ReturnType<typeof runOrder>;
+/** menor = melhor: o que sobrou, depois (conforme o modo) menos veículos ou menor pico de peso. */
+function compareRuns(a: RunResult, b: RunResult, mode: DistributeMode): number {
+  if (a.notFit.length !== b.notFit.length) return a.notFit.length - b.notFit.length;
+  if (Math.abs(a.notFitArea - b.notFitArea) > 1e-6) return a.notFitArea - b.notFitArea;
+  if (mode === "FILL") return a.used - b.used;
+  return a.peak - b.peak;
+}
+
+/** Gerador pseudo-aleatório simples (determinístico por semente), pra "outra sugestão" ser reproduzível. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Reparte os itens entre vários veículos. `variant` 0 = melhor das ordens clássicas
+ * (maior área, maior comprimento, maior largura, mais pesado); `variant` > 0 testa
+ * ordens embaralhadas e sorteia, entre as melhores, uma diferente — "outra sugestão".
+ */
+export function distributePack(
+  items: PackItem[],
+  slots: SlotBed[],
+  mode: DistributeMode,
+  variant = 0
+): { assigned: Map<string, Assigned>; notFit: PackItem[] } {
+  if (slots.length === 0) return { assigned: new Map(), notFit: items };
+
+  const byArea = (a: PackItem, b: PackItem) => b.w * b.h - a.w * a.h;
+  const orders: PackItem[][] = [
+    [...items].sort(byArea),
+    [...items].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h)),
+    [...items].sort((a, b) => Math.min(b.w, b.h) - Math.min(a.w, a.h)),
+    [...items].sort((a, b) => b.weightKg - a.weightKg || byArea(a, b)),
+  ];
+  if (variant > 0) {
+    const rnd = mulberry32(variant * 7919 + (mode === "FILL" ? 11 : 23));
+    for (let n = 0; n < 40; n++) {
+      // maior primeiro, mas com a ordem "sacudida" — muda o arranjo sem virar bagunça
+      const noise = new Map(items.map((i) => [i.id, i.w * i.h * (0.5 + rnd())]));
+      orders.push([...items].sort((a, b) => (noise.get(b.id) ?? 0) - (noise.get(a.id) ?? 0)));
+    }
+  }
+
+  const runs = orders.map((o) => runOrder(o, slots, mode));
+  let pool = runs;
+  if (variant > 0) {
+    // entre as melhores (empate), escolhe uma ao acaso
+    const best = runs.reduce((b, r) => (compareRuns(r, b, mode) < 0 ? r : b), runs[0]);
+    pool = runs.filter((r) => compareRuns(r, best, mode) === 0);
+    const rnd = mulberry32(variant * 104729 + 5);
+    pool = [pool[Math.floor(rnd() * pool.length)]];
+  } else {
+    pool = [runs.reduce((b, r) => (compareRuns(r, b, mode) < 0 ? r : b), runs[0])];
+  }
+
+  const chosen = pool[0];
+  const assigned = new Map<string, Assigned>();
+  for (const acc of chosen.accs) {
+    for (const p of acc.placed) {
+      assigned.set(p.id, { slotKey: acc.slot.key, x: p.x, y: p.y, rotated: p.rotated, w: p.w, h: p.h });
+    }
+  }
+  return { assigned, notFit: chosen.notFit };
+}
