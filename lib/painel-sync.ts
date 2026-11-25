@@ -6,6 +6,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import { prisma } from "@/lib/db";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 
 const REPO_OWNER = "milwardarthur-prog";
 const REPO_NAME = "testemanut";
@@ -33,6 +34,7 @@ export async function syncPainelEquipamentos(): Promise<void> {
 
   try {
     const equipments = await prisma.equipment.findMany({
+      where: NAO_OCULTO,
       select: {
         equipmentNumber: true,
         leaseStatus: true,

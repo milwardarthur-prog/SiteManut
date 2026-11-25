@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import { requireFullAccess } from "@/lib/require-admin";
 import { GeoDeadlineError, geocodeAddress, normalizeAddress } from "@/lib/geocode";
 import { loadGeoCache, saveGeoCache } from "@/lib/mapa-cache";
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     const deadline = startedAt + BUDGET_MS;
 
     const rows = await prisma.equipment.findMany({
-      where: { leaseStatus: "LOCADO", leaseAddress: { not: null } },
+      where: { leaseStatus: "LOCADO", leaseAddress: { not: null }, ...NAO_OCULTO },
       select: { leaseAddress: true },
     });
     const addresses = Array.from(new Set(rows.map((r) => normalizeAddress(r.leaseAddress)).filter(Boolean)));

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireFullAccess } from "@/lib/require-admin";
 import { normalizeAddress } from "@/lib/geocode";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import { isFound, loadGeoCache } from "@/lib/mapa-cache";
 
 export type MaintenanceState = "VENCIDA" | "PROXIMA" | "EM_DIA" | "SEM_DADO";
@@ -18,7 +19,7 @@ export async function GET() {
   try {
     const [equipments, cache] = await Promise.all([
       prisma.equipment.findMany({
-        where: { leaseStatus: "LOCADO" },
+        where: { leaseStatus: "LOCADO", ...NAO_OCULTO },
         select: {
           id: true,
           equipmentNumber: true,

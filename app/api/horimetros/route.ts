@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
 import { compararEquipmentNumber } from "@/lib/ge-equipamentos";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import {
   classifyPending,
   computeConsumption,
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const equipments = await prisma.equipment.findMany({
+      where: NAO_OCULTO,
       select: {
         id: true,
         equipmentNumber: true,

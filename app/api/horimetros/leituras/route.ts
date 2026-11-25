@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/require-admin";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import {
   computeNextReadingDate,
   diffDays,
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     // Carrega equipamentos referenciados
     const ids = Array.from(new Set(readings.map((r) => r.equipmentId).filter(Boolean)));
     const equipments = await prisma.equipment.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...NAO_OCULTO },
       select: {
         id: true,
         equipmentNumber: true,

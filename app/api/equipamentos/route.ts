@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EXTRA_FIELD_KEYS } from "@/lib/equipment-fields";
 import { compararEquipmentNumber } from "@/lib/ge-equipamentos";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import crypto from "crypto";
 
 // Extrai os campos extras (Filtros, Componentes, Dimensões) do body.
@@ -27,12 +28,13 @@ export async function GET(req: NextRequest) {
     const search = req.nextUrl?.searchParams?.get("search") ?? "";
     const where = search
       ? {
+          ...NAO_OCULTO,
           OR: [
             { equipmentNumber: { contains: search } },
             { name: { contains: search } },
           ],
         }
-      : {};
+      : { ...NAO_OCULTO };
     const equipments = await prisma.equipment.findMany({
       where,
       include: { _count: { select: { workOrders: true, files: true } } },

@@ -1,5 +1,8 @@
+import { isOculto } from "@/lib/equipamentos-ocultos";
+
 // Lista fixa de equipamentos (GE) usada nas páginas de Checklist e Teste de Carga.
-// Mantida igual aos sites originais para preservar o comportamento.
+// Mantida igual aos sites originais para preservar o comportamento — exceto os
+// equipamentos ocultos (vendidos), que ficam de fora (lib/equipamentos-ocultos.ts).
 export const GE_EQUIPAMENTOS: string[] = [
   "GE-02-50", "GE-03-40", "GE-04-55", "GE-05-55", "GE-06-115", "GE-09-170", "GE-10-25", "GE-11-75",
   "GE-12-75", "GE-13-500", "GE-14-140", "GE-15-170", "GE-16-40", "GE-17-81", "GE-18-100", "GE-19-81",
@@ -15,7 +18,7 @@ export const GE_EQUIPAMENTOS: string[] = [
   "GE-92-80", "GE-93-85", "GE-94-200", "GE-95-460", "GE-96-27", "GE-97-33", "GE-98-250", "GE-99-36",
   "GE-100-125", "GE-101-12", "GE-102-55", "GE-103-150", "GE-104-65", "GE-105-45", "GE-106-500", "GE-107-230",
   "GE-108-125", "GE-109-25", "GE-110-80", "GE-111-125", "GE-112-125", "GE-113-360", "GE-114-360",
-];
+].filter((c) => !isOculto(c));
 
 // Ordena pela parte numérica do meio (GE-<num>-...), como nos sites originais.
 export function ordenarEquipamentos(lista: string[]): string[] {

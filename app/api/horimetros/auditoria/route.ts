@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import { requireAdmin } from "@/lib/require-admin";
 import { canAudit } from "@/lib/access";
 import { analyzeReadings, buildLeaseHistory } from "@/lib/horimetro-audit";
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     const [equipments, readings, attempts, imports, users, reviews] = await Promise.all([
       prisma.equipment.findMany({
+        where: NAO_OCULTO,
         select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true },
       }),
       prisma.horimeterReading.findMany({

@@ -4,6 +4,7 @@
 // (github.io/testemanut). Na visão pública NÃO saem cliente nem status de
 // locação — só dado técnico (código, medidas, peso).
 import { prisma } from "@/lib/db";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import { parseMeters } from "@/lib/carga";
 import { loadExtras, loadVehicles, loadWeights } from "@/lib/carga-store";
 
@@ -23,6 +24,7 @@ export type CargaEquipment = {
 export async function loadCargaData(opts: { publicView: boolean }) {
   const [equipments, vehicles, weights, extras] = await Promise.all([
     prisma.equipment.findMany({
+      where: NAO_OCULTO,
       select: {
         id: true,
         equipmentNumber: true,

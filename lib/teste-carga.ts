@@ -4,6 +4,7 @@
 // CSV "testes_carga_csv", que cada OS de Teste de Carga finalizada alimenta.
 import Papa from "papaparse";
 import { prisma } from "@/lib/db";
+import { NAO_OCULTO } from "@/lib/equipamentos-ocultos";
 import { normalizeCode } from "@/lib/horimetro";
 import { sendPushToUser } from "@/lib/push";
 
@@ -117,7 +118,7 @@ export async function buildReturnedToYardAlert(
   if (equipmentIds.length === 0) return null;
   const [equipments, lastDates, openOrders] = await Promise.all([
     prisma.equipment.findMany({
-      where: { id: { in: equipmentIds }, leaseStatus: "DISPONIVEL" },
+      where: { id: { in: equipmentIds }, leaseStatus: "DISPONIVEL", ...NAO_OCULTO },
       select: { id: true, equipmentNumber: true, leaseStatus: true },
     }),
     getLastLoadTestDates(),

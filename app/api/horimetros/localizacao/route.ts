@@ -8,6 +8,7 @@ import { normalizeCode } from "@/lib/horimetro";
 import { syncPainelEquipamentos } from "@/lib/painel-sync";
 import { RETURN_CONFERENCE_NOTE } from "@/lib/retorno-locacao";
 import { sameClientName } from "@/lib/client-name";
+import { NAO_OCULTO, isOculto } from "@/lib/equipamentos-ocultos";
 
 // Identifica as colunas relevantes de forma tolerante a variações de cabeçalho.
 // Suporta tanto o CSV simples (equipamento;cliente) quanto o "Mapa de Localização de
@@ -73,6 +74,7 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
   // Base de equipamentos cadastrados: usada tanto pra filtrar o mapa de patrimônio
   // quanto pra conferir as locações no fim.
   const allEquip = await prisma.equipment.findMany({
+    where: NAO_OCULTO,
     select: { equipmentNumber: true, leaseStatus: true, locationSource: true },
   });
   const baseSet = new Set(allEquip.map((e) => normalizeCode(e.equipmentNumber)));
@@ -84,6 +86,9 @@ async function buildPreview(csv: string): Promise<PreviewResult | { error: strin
 
   rows.forEach((row, idx) => {
     const line = idx + 2; // +1 header +1 base-1
+
+    // Equipamento oculto (vendido): se aparecer no arquivo, a linha é ignorada.
+    if (isOculto(row[eqCol!])) return;
 
     // No mapa completo de patrimônio, a maioria das linhas não é equipamento
     // controlado aqui (cabos, bacias, jumpers...) — ignora silenciosamente essas
@@ -234,6 +239,7 @@ export async function POST(req: NextRequest) {
       // marcados manualmente como locados (sem contrato ativo no relatório),
       // que são preservados em vez de virarem "disponível" automaticamente.
       const allEquip = await prisma.equipment.findMany({
+        where: NAO_OCULTO,
         select: { id: true, equipmentNumber: true, leaseStatus: true, locationSource: true, currentClient: true },
       });
 
